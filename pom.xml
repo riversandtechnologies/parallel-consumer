@@ -72,6 +72,8 @@
     <properties>
         <source.version>17</source.version>
         <release.target>8</release.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
 
         <!-- when running mvn locally from cmd line, use default jvm for jvm8 - by default uses the runtime JVM -->
         <jvm.location>${java.home}</jvm.location>
@@ -82,7 +84,7 @@
         <delombok.output>${project.basedir}/target/delombok</delombok.output>
 
         <!-- standard props -->
-        <maven.version>3.6.3</maven.version>
+        <maven.version>3.8.6</maven.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
@@ -741,10 +743,10 @@
                                     <version>[${source.version},)</version>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
-                                    <version>3.6.3</version>
+                                    <version>3.8.6</version>
                                 </requireMavenVersion>
                                 <requireMavenVersion>
-                                    <version>3.6.3</version>
+                                    <version>3.8.6</version>
                                 </requireMavenVersion>
                                 <bannedDependencies>
                                     <searchTransitive>true</searchTransitive>
