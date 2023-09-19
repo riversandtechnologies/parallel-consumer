@@ -27,9 +27,14 @@ public class ShardKey {
 
     public static ShardKey of(ConsumerRecord<?, ?> rec, ProcessingOrder ordering) {
         return switch (ordering) {
+            case KEY_EXCLUSIVE -> ofKeyExclusive(rec);
             case KEY -> ofKey(rec);
             case PARTITION, UNORDERED -> ofTopicPartition(rec);
         };
+    }
+
+    public static KeyExclusiveOrderedKey ofKeyExclusive(ConsumerRecord<?, ?> rec) {
+        return new KeyExclusiveOrderedKey(rec);
     }
 
     public static KeyOrderedKey ofKey(ConsumerRecord<?, ?> rec) {
@@ -38,6 +43,21 @@ public class ShardKey {
 
     public static ShardKey ofTopicPartition(final ConsumerRecord<?, ?> rec) {
         return new TopicPartitionKey(new TopicPartition(rec.topic(), rec.partition()));
+    }
+
+    @Value
+    @RequiredArgsConstructor
+    @EqualsAndHashCode(callSuper = true)
+    public static class KeyExclusiveOrderedKey extends ShardKey {
+
+        /**
+         * The key of the record being referenced. Nullable if record is produced with a null key.
+         */
+        Object key;
+
+        public KeyExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
+            this(rec.key());
+        }
     }
 
     @Value

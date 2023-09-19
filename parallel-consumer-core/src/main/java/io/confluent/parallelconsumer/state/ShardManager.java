@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY;
+import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY_EXCLUSIVE;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 
@@ -195,7 +196,7 @@ public class ShardManager<K, V> {
 
         // If using KEY ordering, where the shard key is a message key, garbage collect old shard keys (i.e. KEY ordering we may never see a message for this key again)
         // If not, no point to remove the shard, as it will be reused for the next message from the same partition
-        boolean keyOrdering = options.getOrdering().equals(KEY);
+        boolean keyOrdering = options.getOrdering().equals(KEY) || options.getOrdering().equals(KEY_EXCLUSIVE);
         if (keyOrdering && shardOpt.isPresent() && shardOpt.get().isEmpty()) {
             log.trace("Removing empty shard (key: {})", key);
             this.processingShards.remove(key);

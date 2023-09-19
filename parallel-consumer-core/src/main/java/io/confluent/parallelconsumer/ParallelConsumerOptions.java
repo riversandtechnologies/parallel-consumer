@@ -119,7 +119,13 @@ public class ParallelConsumerOptions<K, V> {
          * Process messages in key order. Concurrency is at most the number of unique keys in a topic, limited by the
          * max concurrency or uncommitted settings.
          */
-        KEY
+        KEY,
+
+        /**
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic, limited by the
+         * max concurrency or uncommitted settings.
+         */
+        KEY_EXCLUSIVE
     }
 
     /**
