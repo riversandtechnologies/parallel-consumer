@@ -4,7 +4,8 @@ package io.confluent.parallelconsumer.internal;
  * Copyright (C) 2020-2023 Confluent, Inc.
  */
 
-import lombok.RequiredArgsConstructor;
+import io.confluent.parallelconsumer.ActionListeners;
+import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
@@ -12,18 +13,18 @@ import org.apache.kafka.common.errors.WakeupException;
 import pl.tlinkowski.unij.api.UniMaps;
 
 import java.time.Duration;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Delegate for {@link KafkaConsumer}
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ConsumerManager<K, V> {
-
+    private static final Map<TopicPartition, Set<TopicPartition>> PARTITION_SET_MAP = new ConcurrentHashMap<>();
     private final Consumer<K, V> consumer;
+    private final ActionListeners<K, V> actionListeners;
 
     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
 
@@ -43,9 +44,14 @@ public class ConsumerManager<K, V> {
     private int noWakeups = 0;
     private boolean commitRequested;
 
+    public ConsumerManager(ParallelConsumerOptions<K, V> optionsInstance) {
+        this.consumer = optionsInstance.getConsumer();
+        this.actionListeners = optionsInstance.getActionListeners();
+    }
+
     ConsumerRecords<K, V> poll(Duration requestedLongPollTimeout) {
         Duration timeoutToUse = requestedLongPollTimeout;
-        ConsumerRecords<K, V> records;
+        ConsumerRecords<K, V> records = null;
         try {
             if (commitRequested) {
                 log.debug("Commit requested, so will not long poll as need to perform the commit");
@@ -55,18 +61,68 @@ public class ConsumerManager<K, V> {
             pollingBroker.set(true);
             updateCache();
             log.debug("Poll starting with timeout: {}", timeoutToUse);
-            records = consumer.poll(timeoutToUse);
-            log.debug("Poll completed normally (after timeout of {}) and returned {}...", timeoutToUse, records.count());
+            if (actionListeners.shouldPoll()) {
+                records = pollFromEachPartition(timeoutToUse);
+                log.debug("Poll completed normally (after timeout of {}) and returned {}...", timeoutToUse, records.count());
+                actionListeners.afterPoll(records);
+            }
+
             updateCache();
         } catch (WakeupException w) {
             correctPollWakeups++;
             log.debug("Awoken from broker poll");
             log.trace("Wakeup caller is:", w);
-            records = new ConsumerRecords<>(UniMaps.of());
         } finally {
+            if (records == null || records.isEmpty()) {
+                records = new ConsumerRecords<>(UniMaps.of());
+            }
             pollingBroker.set(false);
         }
         return records;
+    }
+
+    private ConsumerRecords<K, V> pollFromEachPartition(final Duration timeoutToUse) {
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetches = new HashMap<>();
+        Set<TopicPartition> pausedPartitions = consumer.paused();
+        Set<TopicPartition> assignment = consumer.assignment();
+        consumer.pause(assignment);
+        for (final TopicPartition topicPartition : assignment) {
+            if (!pausedPartitions.contains(topicPartition)) {
+                Set<TopicPartition> pollPartition = getPartitionSetMap(topicPartition);
+                consumer.resume(pollPartition);
+                try {
+                    ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
+                    if (partitionRecords != null && !partitionRecords.isEmpty()) {
+                        List<ConsumerRecord<K, V>> consumerRecords = partitionRecords.records(topicPartition);
+                        fetches.put(topicPartition, consumerRecords);
+                    }
+                } catch (WakeupException w) {
+                    w.printStackTrace();
+                    correctPollWakeups++;
+                }
+                consumer.pause(pollPartition);
+            }
+        }
+
+        for (final TopicPartition topicPartition : assignment) {
+            if (!pausedPartitions.contains(topicPartition)) {
+                consumer.resume(getPartitionSetMap(topicPartition));
+            }
+        }
+
+        if (!fetches.isEmpty()) {
+            return new ConsumerRecords<>(fetches);
+        } else {
+            return consumer.poll(timeoutToUse);
+        }
+    }
+
+    private Set<TopicPartition> getPartitionSetMap(TopicPartition topicPartition) {
+        return PARTITION_SET_MAP.computeIfAbsent(topicPartition, k -> {
+            Set<TopicPartition> pollP = new HashSet<>();
+            pollP.add(k);
+            return pollP;
+        });
     }
 
     protected void updateCache() {

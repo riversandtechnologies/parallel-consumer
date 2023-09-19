@@ -9,7 +9,6 @@ import io.confluent.parallelconsumer.metrics.PCMetricsDef;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
@@ -21,13 +20,11 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.Function;
 
 import static io.confluent.csid.utils.StringUtils.msg;
 import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.PERIODIC_TRANSACTIONAL_PRODUCER;
 import static java.time.Duration.ofMillis;
-import static java.util.Collections.emptyList;
 
 /**
  * The options for the {@link AbstractParallelEoSStreamProcessor} system.
@@ -36,8 +33,8 @@ import static java.util.Collections.emptyList;
  * <p>
  * {@link #ordering}, {@link #maxConcurrency} and {@link #batchSize}.
  * <p>
- * If you want to go deeper, look at {@link #defaultMessageRetryDelay}, {@link #retryDelayProvider} and
- * {@link #commitMode}.
+ * If you want to go deeper, look at {@link #defaultMessageRetryDelay}, {@link #retryDelayProvider} and {@link
+ * #commitMode}.
  * <p>
  * Note: The only required option is the {@link #consumer} ({@link #producer} is only needed if you use the Produce
  * flows). All other options have sensible defaults.
@@ -52,6 +49,8 @@ import static java.util.Collections.emptyList;
 @FieldNameConstants
 @InterfaceStability.Evolving
 public class ParallelConsumerOptions<K, V> {
+
+    private final ActionListeners<K, V> actionListeners = new ActionListeners<>();
 
     /**
      * Required parameter for all use.
@@ -122,8 +121,8 @@ public class ParallelConsumerOptions<K, V> {
         KEY,
 
         /**
-         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic, limited by the
-         * max concurrency or uncommitted settings.
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
+         * limited by the max concurrency or uncommitted settings.
          */
         KEY_EXCLUSIVE
     }
@@ -152,8 +151,8 @@ public class ParallelConsumerOptions<K, V> {
          * <p>
          * The benefits of using this mode are:
          * <p>
-         * a) All records produced from a given source offset will either all be visible, or none will be
-         * ({@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED}).
+         * a) All records produced from a given source offset will either all be visible, or none will be ({@link
+         * org.apache.kafka.common.IsolationLevel#READ_COMMITTED}).
          * <p>
          * b) If any records making up a transaction have a terminal issue being produced, or the system crashes before
          * finishing sending all the records and committing, none will ever be visible and the system will eventually
@@ -186,9 +185,9 @@ public class ParallelConsumerOptions<K, V> {
          * have been produced successfully to the broker before the transaction will commit, after which all will be
          * visible together, or none.
          * <p>
-         * Records produced while running in this mode, won't be seen by consumer running in
-         * {@link ConsumerConfig#ISOLATION_LEVEL_CONFIG} {@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED}
-         * mode until the transaction is complete and all records are produced successfully. Records produced into a
+         * Records produced while running in this mode, won't be seen by consumer running in {@link
+         * ConsumerConfig#ISOLATION_LEVEL_CONFIG} {@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED} mode
+         * until the transaction is complete and all records are produced successfully. Records produced into a
          * transaction that gets aborted or timed out, will never be visible.
          * <p>
          * The system must prevent records from being produced to the brokers whose source consumer record offsets has
@@ -200,9 +199,9 @@ public class ParallelConsumerOptions<K, V> {
          * resumes by releasing the commit lock. This periodically slows down record production during this phase, by
          * the time needed to commit the transaction.
          * <p>
-         * This is all separate from using an IDEMPOTENT Producer, which can be used, along with the
-         * {@link ParallelConsumerOptions#commitMode} {@link CommitMode#PERIODIC_CONSUMER_SYNC} or
-         * {@link CommitMode#PERIODIC_CONSUMER_ASYNCHRONOUS}.
+         * This is all separate from using an IDEMPOTENT Producer, which can be used, along with the {@link
+         * ParallelConsumerOptions#commitMode} {@link CommitMode#PERIODIC_CONSUMER_SYNC} or {@link
+         * CommitMode#PERIODIC_CONSUMER_ASYNCHRONOUS}.
          * <p>
          * Failure:
          * <p>
@@ -214,8 +213,8 @@ public class ParallelConsumerOptions<K, V> {
          * Produce lock: If the system cannot acquire the produce lock in time, it will fail the record processing and
          * retry the record later. This can be caused by the controller taking too long to commit for some reason. See
          * {@link #produceLockAcquisitionTimeout}. If using {@link #allowEagerProcessingDuringTransactionCommit}, this
-         * may cause side effect replay when the record is retried, otherwise there is no replay. See
-         * {@link #allowEagerProcessingDuringTransactionCommit} for more details.
+         * may cause side effect replay when the record is retried, otherwise there is no replay. See {@link
+         * #allowEagerProcessingDuringTransactionCommit} for more details.
          *
          * @see ParallelConsumerOptions.ParallelConsumerOptionsBuilder#commitInterval
          */
@@ -223,9 +222,9 @@ public class ParallelConsumerOptions<K, V> {
         PERIODIC_TRANSACTIONAL_PRODUCER,
 
         /**
-         * Periodically synchronous commits with the Consumer. Much faster than
-         * {@link #PERIODIC_TRANSACTIONAL_PRODUCER}. Slower but potentially fewer duplicates than
-         * {@link #PERIODIC_CONSUMER_ASYNCHRONOUS} upon replay.
+         * Periodically synchronous commits with the Consumer. Much faster than {@link
+         * #PERIODIC_TRANSACTIONAL_PRODUCER}. Slower but potentially fewer duplicates than {@link
+         * #PERIODIC_CONSUMER_ASYNCHRONOUS} upon replay.
          */
         PERIODIC_CONSUMER_SYNC,
 
@@ -287,8 +286,8 @@ public class ParallelConsumerOptions<K, V> {
     private Duration commitInterval = DEFAULT_COMMIT_INTERVAL;
 
     /**
-     * @deprecated only settable during {@code deprecation phase} - use
-     *         {@link ParallelConsumerOptions.ParallelConsumerOptionsBuilder#commitInterval}} instead.
+     * @deprecated only settable during {@code deprecation phase} - use {@link ParallelConsumerOptions.ParallelConsumerOptionsBuilder#commitInterval}}
+     *         instead.
      */
     // todo delete in next major version
     @Deprecated
@@ -312,9 +311,9 @@ public class ParallelConsumerOptions<K, V> {
      * Controls the maximum degree of concurrency to occur. Used to limit concurrent calls to external systems to a
      * maximum to prevent overloading them or to a degree, using up quotas.
      * <p>
-     * When using {@link #getBatchSize()}, this is over and above the batch size setting. So for example, a
-     * {@link #getMaxConcurrency()} of {@code 2} and a batch size of {@code 3} would result in at most {@code 15}
-     * records being processed at once.
+     * When using {@link #getBatchSize()}, this is over and above the batch size setting. So for example, a {@link
+     * #getMaxConcurrency()} of {@code 2} and a batch size of {@code 3} would result in at most {@code 15} records being
+     * processed at once.
      * <p>
      * A note on quotas - if your quota is expressed as maximum concurrent calls, this works well. If it's limited in
      * total requests / sec, this may still overload the system. See towards the distributed rate limiting feature for
@@ -370,8 +369,8 @@ public class ParallelConsumerOptions<K, V> {
     private final Duration defaultMessageRetryDelay = DEFAULT_STATIC_RETRY_DELAY;
 
     /**
-     * When present, use this to generate a dynamic retry delay, instead of a static one with
-     * {@link #getDefaultMessageRetryDelay()}.
+     * When present, use this to generate a dynamic retry delay, instead of a static one with {@link
+     * #getDefaultMessageRetryDelay()}.
      * <p>
      * Overrides {@link #defaultMessageRetryDelay}, even if it's set.
      */
@@ -379,9 +378,8 @@ public class ParallelConsumerOptions<K, V> {
 
     /**
      * Controls how long to block while waiting for the {@link Producer#send} to complete for any ProducerRecords
-     * returned from the user-function. Only relevant if using one of the produce-flows and providing a
-     * {@link ParallelConsumerOptions#producer}. If the timeout occurs the record will be re-processed in the
-     * user-function.
+     * returned from the user-function. Only relevant if using one of the produce-flows and providing a {@link
+     * ParallelConsumerOptions#producer}. If the timeout occurs the record will be re-processed in the user-function.
      * <p>
      * Consider aligning the value with the {@link ParallelConsumerOptions#producer}-options to avoid unnecessary
      * re-processing and duplicates on slow {@link Producer#send} calls.
@@ -392,8 +390,8 @@ public class ParallelConsumerOptions<K, V> {
     private final Duration sendTimeout = Duration.ofSeconds(10);
 
     /**
-     * Controls how long to block while waiting for offsets to be committed. Only relevant if using
-     * {@link CommitMode#PERIODIC_CONSUMER_SYNC} commit-mode.
+     * Controls how long to block while waiting for offsets to be committed. Only relevant if using {@link
+     * CommitMode#PERIODIC_CONSUMER_SYNC} commit-mode.
      */
     @Builder.Default
     private final Duration offsetCommitTimeout = Duration.ofSeconds(10);
@@ -410,9 +408,9 @@ public class ParallelConsumerOptions<K, V> {
      * Otherwise, if you're going to process messages in sub sets from this batch, it's better to instead adjust the
      * {@link ParallelConsumerOptions#getBatchSize()} instead to the actual desired size, and process them as a whole.
      * <p>
-     * Note that there is no relationship between the {@link ConsumerConfig} setting of
-     * {@link ConsumerConfig#MAX_POLL_RECORDS_CONFIG} and this configured batch size, as this library introduces a large
-     * layer of indirection between the managed consumer, and the managed queues we use.
+     * Note that there is no relationship between the {@link ConsumerConfig} setting of {@link
+     * ConsumerConfig#MAX_POLL_RECORDS_CONFIG} and this configured batch size, as this library introduces a large layer
+     * of indirection between the managed consumer, and the managed queues we use.
      * <p>
      * This indirection effectively disconnects the processing of messages from "polling" them from the managed client,
      * as we do not wait to process them before calling poll again. We simply call poll as much as we need to, in order
@@ -513,4 +511,8 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     public final Duration drainTimeout = Duration.ofSeconds(30);
+
+    public void registerActionListener(final ActionListener<K, V> actionListener) {
+        actionListeners.registerListener(actionListener);
+    }
 }
