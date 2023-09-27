@@ -1,16 +1,24 @@
 package io.confluent.parallelconsumer;
 
 /*-
- * Copyright (C) 2020-2023 Syndigo
+ * Copyright (C) 2020-2023 Confluent, Inc.
  */
 
-import org.apache.kafka.clients.consumer.ConsumerRecords;
+import io.confluent.parallelconsumer.internal.AbstractParallelEoSStreamProcessor;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.List;
+import java.util.Map;
 
 public interface ActionListener<K, V> {
 
-    public boolean shouldPoll();
+    void refresh(AbstractParallelEoSStreamProcessor<K, V> apc, Consumer<K, V> consumer);
 
-    public void afterPoll(ConsumerRecords<K, V> records);
+    public boolean shouldPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final TopicPartition pollTopicPartition);
+
+    public void afterPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
 
     public void action();
 

@@ -1,0 +1,43 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <activeProfiles>
+        <activeProfile>dataplatform</activeProfile>
+    </activeProfiles>
+
+    <profiles>
+        <profile>
+            <id>dataplatform</id>
+            <repositories>
+                <repository>
+                    <id>central</id>
+                    <url>https://repo1.maven.org/maven2</url>
+                    <releases>
+                        <enabled>false</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+                <repository>
+                    <id>dp.internal</id>
+                    <url>https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+        </profile>
+    </profiles>
+    <servers>
+        <server>
+            <id>dp.internal</id>
+            <username>edgenettfs</username>
+            <password>${env.EDS_PUBLISH}</password>
+        </server>
+    </servers>
+</settings>

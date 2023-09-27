@@ -98,4 +98,5 @@ public interface ParallelConsumer<K, V> extends DrainingCloseable {
         }
     }
 
+    void registerActionListener(final ActionListener<K, V> actionListener);
 }

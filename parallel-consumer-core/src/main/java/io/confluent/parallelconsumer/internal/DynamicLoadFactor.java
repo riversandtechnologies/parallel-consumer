@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2023 Confluent, Inc.
  */
 
 import lombok.Getter;
@@ -33,7 +33,7 @@ public class DynamicLoadFactor {
      * <p>
      * Starts off as 2, so there's a good guarantee that we start off with enough data queued up.
      */
-    private static final int DEFAULT_INITIAL_LOADING_FACTOR = 2;
+    private static final int DEFAULT_INITIAL_LOADING_FACTOR = 1;
 
     private final long startTimeMs = System.currentTimeMillis();
 
@@ -62,7 +62,7 @@ public class DynamicLoadFactor {
      * finishes, theres at least one more entry for it in the queue.
      */
     @Getter
-    private final int maxFactor = 100;
+    private final int maxFactor = 1;
 
     @Getter
     private int currentFactor = DEFAULT_INITIAL_LOADING_FACTOR;

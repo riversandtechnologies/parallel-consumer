@@ -244,7 +244,6 @@ public class ShardManager<K, V> {
     public List<WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
         LoopingResumingIterator<ShardKey, ProcessingShard<K, V>> shardQueueIterator =
                 new LoopingResumingIterator<>(iterationResumePoint, this.processingShards);
-
         //
         List<WorkContainer<K, V>> workFromAllShards = new ArrayList<>();
 
@@ -270,7 +269,6 @@ public class ShardManager<K, V> {
 
         //
         updateResumePoint(next);
-
         return workFromAllShards;
     }
 
