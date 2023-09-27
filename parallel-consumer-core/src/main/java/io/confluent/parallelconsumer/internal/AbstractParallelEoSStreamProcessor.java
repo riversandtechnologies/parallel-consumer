@@ -74,6 +74,9 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
     @Getter(PROTECTED)
     protected final ParallelConsumerOptions<K, V> options;
 
+    @Getter
+    private ActionListeners<K, V> actionListeners;
+
     /**
      * Injectable clock for testing
      */
@@ -309,6 +312,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
         //Initialize metrics for this class once all the objects are created
         initMetrics();
+        actionListeners = new ActionListeners<>(this);
     }
 
     private void initMetrics() {
@@ -934,16 +938,24 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
     private List<List<WorkContainer<K, V>>> makeBatches(List<WorkContainer<K, V>> workToProcess) {
         int maxBatchSize = options.getBatchSize();
-        return partition(workToProcess, maxBatchSize);
+        long maxBatchBytes = options.getBatchBytes();
+        return partition(workToProcess, maxBatchSize, maxBatchBytes);
     }
 
-    private static <T> List<List<T>> partition(Collection<T> sourceCollection, int maxBatchSize) {
-        List<List<T>> listOfBatches = new ArrayList<>();
-        List<T> batchInConstruction = new ArrayList<>();
-
+    private static <K, V> List<List<WorkContainer<K, V>>> partition(List<WorkContainer<K, V>> sourceCollection, int maxBatchSize, final long maxBatchBytes) {
+        List<List<WorkContainer<K, V>>> listOfBatches = new ArrayList<>();
+        List<WorkContainer<K, V>> batchInConstruction = new ArrayList<>();
+        long batchBytes = 0;
         //
-        for (T item : sourceCollection) {
-            batchInConstruction.add(item);
+        for (final WorkContainer<K, V> toProcess : sourceCollection) {
+            long crsize = toProcess.getCr().serializedValueSize() + toProcess.getCr().serializedKeySize();
+            batchBytes += crsize;
+            if (batchBytes >= maxBatchBytes && !batchInConstruction.isEmpty()) {
+                listOfBatches.add(batchInConstruction);
+                batchInConstruction = new ArrayList<>();
+                batchBytes = crsize;
+            }
+            batchInConstruction.add(toProcess);
 
             //
             if (batchInConstruction.size() == maxBatchSize) {
@@ -1449,5 +1461,10 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         } else {
             log.debug("Skipping transition of parallel consumer to state running. Current state is {}.", this.state);
         }
+    }
+
+    @Override
+    public void registerActionListener(final ActionListener<K, V> actionListener) {
+        actionListeners.registerListener(actionListener);
     }
 }

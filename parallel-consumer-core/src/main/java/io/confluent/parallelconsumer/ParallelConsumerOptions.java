@@ -49,9 +49,6 @@ import static java.time.Duration.ofMillis;
 @FieldNameConstants
 @InterfaceStability.Evolving
 public class ParallelConsumerOptions<K, V> {
-
-    private final ActionListeners<K, V> actionListeners = new ActionListeners<>();
-
     /**
      * Required parameter for all use.
      */
@@ -425,6 +422,9 @@ public class ParallelConsumerOptions<K, V> {
     @Builder.Default
     private final Integer batchSize = 1;
 
+    @Builder.Default
+    private final Long batchBytes = 1000000L;
+
     /**
      * Configure the amount of delay a record experiences, before a warning is logged.
      */
@@ -511,8 +511,4 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     public final Duration drainTimeout = Duration.ofSeconds(30);
-
-    public void registerActionListener(final ActionListener<K, V> actionListener) {
-        actionListeners.registerListener(actionListener);
-    }
 }
