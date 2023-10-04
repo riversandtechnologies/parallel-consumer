@@ -16,9 +16,9 @@ public interface ActionListener<K, V> {
 
     void refresh(AbstractParallelEoSStreamProcessor<K, V> apc, Consumer<K, V> consumer);
 
-    public boolean shouldPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final TopicPartition pollTopicPartition);
+    public boolean shouldPoll(final Consumer<K, V> consumer, final TopicPartition pollTopicPartition);
 
-    public void afterPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
+    public void afterPoll(final Consumer<K, V> consumer, final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
 
     public void action();
 

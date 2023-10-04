@@ -281,6 +281,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         this.shutdownTimeout = options.getShutdownTimeout();
         this.drainTimeout = options.getDrainTimeout();
         this.consumer = options.getConsumer();
+        actionListeners = new ActionListeners<>(this);
 
         validateConfiguration();
 
@@ -312,7 +313,6 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
         //Initialize metrics for this class once all the objects are created
         initMetrics();
-        actionListeners = new ActionListeners<>(this);
     }
 
     private void initMetrics() {

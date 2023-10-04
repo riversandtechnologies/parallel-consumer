@@ -20,12 +20,12 @@ public class AbstractActionListener<K, V> implements ActionListener<K, V> {
     }
 
     @Override
-    public boolean shouldPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final TopicPartition pollTopicPartition) {
+    public boolean shouldPoll(final Consumer<K, V> consumer, final TopicPartition pollTopicPartition) {
         return true;
     }
 
     @Override
-    public void afterPoll(final AbstractParallelEoSStreamProcessor<K, V> apc, final Consumer<K, V> consumer, final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
+    public void afterPoll(final Consumer<K, V> consumer, final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
 
     }
 
