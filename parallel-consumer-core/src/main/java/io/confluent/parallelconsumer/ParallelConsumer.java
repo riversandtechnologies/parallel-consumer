@@ -97,6 +97,4 @@ public interface ParallelConsumer<K, V> extends DrainingCloseable {
             return new Tuple<>(l, r);
         }
     }
-
-    void registerActionListener(final ActionListener<K, V> actionListener);
 }

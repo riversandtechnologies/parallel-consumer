@@ -281,7 +281,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         this.shutdownTimeout = options.getShutdownTimeout();
         this.drainTimeout = options.getDrainTimeout();
         this.consumer = options.getConsumer();
-        actionListeners = new ActionListeners<>(this);
+        actionListeners = new ActionListeners<>();
 
         validateConfiguration();
 
@@ -458,8 +458,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
     }
 
     /**
-     * Cannot commit any offsets for partitions that have been `lost` (as opposed to revoked). Just delegate to {@link
-     * WorkManager} for truncation.
+     * Cannot commit any offsets for partitions that have been `lost` (as opposed to revoked). Just delegate to
+     * {@link WorkManager} for truncation.
      *
      * @see WorkManager#onPartitionsAssigned
      */
@@ -677,8 +677,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
     /**
      * Control thread can be blocked waiting for work, but is interruptible. Interrupting it can be useful to inform
-     * that work is available when there was none, to make tests run faster, or to move on to shutting down the {@link
-     * BrokerPollSystem} so that less messages are downloaded and queued.
+     * that work is available when there was none, to make tests run faster, or to move on to shutting down the
+     * {@link BrokerPollSystem} so that less messages are downloaded and queued.
      */
     private void interruptControlThread() {
         if (blockableControlThread != null) {
@@ -1463,7 +1463,6 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
     }
 
-    @Override
     public void registerActionListener(final ActionListener<K, V> actionListener) {
         actionListeners.registerListener(actionListener);
     }
