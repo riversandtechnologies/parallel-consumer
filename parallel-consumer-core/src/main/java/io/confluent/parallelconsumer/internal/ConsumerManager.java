@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import pl.tlinkowski.unij.api.UniMaps;
 
 import java.time.Duration;
 import java.util.*;
@@ -66,10 +67,8 @@ public class ConsumerManager<K, V> {
             correctPollWakeups++;
             log.debug("Awoken from broker poll");
             log.trace("Wakeup caller is:", w);
+            records = new ConsumerRecords<>(UniMaps.of());
         } finally {
-            if (records == null) {
-                records = ConsumerRecords.empty();
-            }
             pollingBroker.set(false);
         }
         return records;
