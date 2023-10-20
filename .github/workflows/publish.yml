@@ -24,11 +24,11 @@ jobs:
       - name: Print env
         run: |
           echo Publishing ${RELEASE_VERSION}
-      - name: Set up Eclipse Temurin JDK 17
+      - name: Set up Eclipse Temurin JDK 21
         uses: actions/setup-java@v1
         with:
           distribution: 'temurin'
-          java-version: 17
+          java-version: 21
       - name: Cache
         uses: actions/cache@v2
         with:
@@ -44,4 +44,5 @@ jobs:
         env:
           EDS_PUBLISH: ${{ secrets.EDS_PUBLISH }}
         run: |
-          mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=target/rdp-parallel-consumer-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=rdp-parallel-consumer -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+          mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-core -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+          mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-react/target/parallel-consumer-react-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-react -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
