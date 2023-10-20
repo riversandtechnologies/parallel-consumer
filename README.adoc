@@ -472,11 +472,12 @@ See {issues_link}/12[issue #12], and the `ParallelConsumer` JavaDoc:
 
 [source,java]
 ----
+
 /**
  * Asynchronous / concurrent message consumer for Kafka.
  * <p>
- * Currently, there is no direct implementation, only the {@link ParallelStreamProcessor} version (see
- * {@link AbstractParallelEoSStreamProcessor}), but there may be in the future.
+ * Currently, there is no direct implementation, only the {@link ParallelStreamProcessor} version (see {@link
+ * AbstractParallelEoSStreamProcessor}), but there may be in the future.
  *
  * @param <K> key consume / produce key type
  * @param <V> value consume / produce value type
@@ -936,8 +937,8 @@ For implementations details, see the <<Transactional System Architecture>> secti
          * <p>
          * The benefits of using this mode are:
          * <p>
-         * a) All records produced from a given source offset will either all be visible, or none will be
-         * ({@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED}).
+         * a) All records produced from a given source offset will either all be visible, or none will be ({@link
+         * org.apache.kafka.common.IsolationLevel#READ_COMMITTED}).
          * <p>
          * b) If any records making up a transaction have a terminal issue being produced, or the system crashes before
          * finishing sending all the records and committing, none will ever be visible and the system will eventually
@@ -970,9 +971,9 @@ For implementations details, see the <<Transactional System Architecture>> secti
          * have been produced successfully to the broker before the transaction will commit, after which all will be
          * visible together, or none.
          * <p>
-         * Records produced while running in this mode, won't be seen by consumer running in
-         * {@link ConsumerConfig#ISOLATION_LEVEL_CONFIG} {@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED}
-         * mode until the transaction is complete and all records are produced successfully. Records produced into a
+         * Records produced while running in this mode, won't be seen by consumer running in {@link
+         * ConsumerConfig#ISOLATION_LEVEL_CONFIG} {@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED} mode
+         * until the transaction is complete and all records are produced successfully. Records produced into a
          * transaction that gets aborted or timed out, will never be visible.
          * <p>
          * The system must prevent records from being produced to the brokers whose source consumer record offsets has
@@ -984,9 +985,9 @@ For implementations details, see the <<Transactional System Architecture>> secti
          * resumes by releasing the commit lock. This periodically slows down record production during this phase, by
          * the time needed to commit the transaction.
          * <p>
-         * This is all separate from using an IDEMPOTENT Producer, which can be used, along with the
-         * {@link ParallelConsumerOptions#commitMode} {@link CommitMode#PERIODIC_CONSUMER_SYNC} or
-         * {@link CommitMode#PERIODIC_CONSUMER_ASYNCHRONOUS}.
+         * This is all separate from using an IDEMPOTENT Producer, which can be used, along with the {@link
+         * ParallelConsumerOptions#commitMode} {@link CommitMode#PERIODIC_CONSUMER_SYNC} or {@link
+         * CommitMode#PERIODIC_CONSUMER_ASYNCHRONOUS}.
          * <p>
          * Failure:
          * <p>
@@ -998,8 +999,8 @@ For implementations details, see the <<Transactional System Architecture>> secti
          * Produce lock: If the system cannot acquire the produce lock in time, it will fail the record processing and
          * retry the record later. This can be caused by the controller taking too long to commit for some reason. See
          * {@link #produceLockAcquisitionTimeout}. If using {@link #allowEagerProcessingDuringTransactionCommit}, this
-         * may cause side effect replay when the record is retried, otherwise there is no replay. See
-         * {@link #allowEagerProcessingDuringTransactionCommit} for more details.
+         * may cause side effect replay when the record is retried, otherwise there is no replay. See {@link
+         * #allowEagerProcessingDuringTransactionCommit} for more details.
          *
          * @see ParallelConsumerOptions.ParallelConsumerOptionsBuilder#commitInterval
          */
@@ -1514,13 +1515,7 @@ NOTE:: Dependency version bumps are not listed here.
 ifndef::github_name[]
 toc::[]
 endif::[]
-== 0.5.2.8
-
-=== Fixes
-
-* fix: Fix equality and hash code for ShardKey with array key (#638), resolves (#579)
-
-== 0.5.2.7
+== 0.5.2.7-rs
 
 === Fixes
 

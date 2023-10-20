@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2023 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.internal.AbstractParallelEoSStreamProcessor;
@@ -14,11 +14,12 @@ import java.util.Collection;
 import java.util.regex.Pattern;
 
 // tag::javadoc[]
+
 /**
  * Asynchronous / concurrent message consumer for Kafka.
  * <p>
- * Currently, there is no direct implementation, only the {@link ParallelStreamProcessor} version (see
- * {@link AbstractParallelEoSStreamProcessor}), but there may be in the future.
+ * Currently, there is no direct implementation, only the {@link ParallelStreamProcessor} version (see {@link
+ * AbstractParallelEoSStreamProcessor}), but there may be in the future.
  *
  * @param <K> key consume / produce key type
  * @param <V> value consume / produce value type
@@ -26,7 +27,6 @@ import java.util.regex.Pattern;
  */
 // end::javadoc[]
 public interface ParallelConsumer<K, V> extends DrainingCloseable {
-
     /**
      * @return true if the system has either closed, or has crashed
      */
@@ -97,5 +97,4 @@ public interface ParallelConsumer<K, V> extends DrainingCloseable {
             return new Tuple<>(l, r);
         }
     }
-
 }
