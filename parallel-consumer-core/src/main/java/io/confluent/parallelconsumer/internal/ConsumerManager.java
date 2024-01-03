@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +67,9 @@ public class ConsumerManager<K, V> {
             correctPollWakeups++;
             log.debug("Awoken from broker poll");
             log.trace("Wakeup caller is:", w);
+            records = new ConsumerRecords<>(UniMaps.of());
+        } catch (IllegalStateException ex) {
+            log.error("Failed to poll from broker", ex);
             records = new ConsumerRecords<>(UniMaps.of());
         } finally {
             pollingBroker.set(false);
