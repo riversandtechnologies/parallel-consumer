@@ -1,6 +1,5 @@
-Description...
+Details..
 
 ### Checklist
 
-- [ ] Documentation (if applicable)
-- [ ] Changelog
+- [ ] Issue Details

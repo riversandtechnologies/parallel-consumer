@@ -17,32 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout parallel-consumer-parent
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Find the version from the project version
         run: |
-          echo "RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+          RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
       - name: Print env
         run: |
           echo Publishing ${RELEASE_VERSION}
       - name: Set up Eclipse Temurin JDK 21
-        uses: actions/setup-java@v1
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: 21
-      - name: Cache
-        uses: actions/cache@v2
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+          java-version: '21'
+          cache: 'maven'
+          cache-dependency-path: '**/pom.xml'
       - name: Create Package
         env:
-          EDS_PUBLISH: ${{ secrets.EDS_PUBLISH }}
+          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD_TOKEN }}
         run: mvn clean package -DskipTests --file pom.xml --settings settings.xml
       - name: Publish Package
         env:
-          EDS_PUBLISH: ${{ secrets.EDS_PUBLISH }}
+          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD_TOKEN }}
         run: |
           mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-core -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
           mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-react/target/parallel-consumer-react-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-react -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
