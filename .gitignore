@@ -66,6 +66,7 @@ delombok/
 
 # Maven
 target
+target-java21
 release.properties
 /.idea/encodings.xml
 /.idea/misc.xml
