@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.SupplierUtils;
@@ -343,21 +343,26 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
     }
 
     protected ThreadPoolExecutor setupWorkerPool(int poolSize) {
-        ThreadFactory defaultFactory;
-        try {
-            defaultFactory = InitialContext.doLookup(options.getManagedThreadFactory());
-        } catch (NamingException e) {
-            log.debug("Using Java SE Thread", e);
-            defaultFactory = Executors.defaultThreadFactory();
+        ThreadFactory namingThreadFactory;
+        if (options.getThreadFactory() == null) {
+            ThreadFactory defaultFactory;
+            try {
+                defaultFactory = InitialContext.doLookup(options.getManagedThreadFactory());
+            } catch (NamingException e) {
+                log.debug("Using Java SE Thread", e);
+                defaultFactory = Executors.defaultThreadFactory();
+            }
+            ThreadFactory finalDefaultFactory = defaultFactory;
+            namingThreadFactory = r -> {
+                Thread thread = finalDefaultFactory.newThread(r);
+                String name = thread.getName();
+                thread.setName("pc-" + name);
+                this.getMyId().ifPresent(id -> thread.setName("pc-" + name + "-" + id));
+                return thread;
+            };
+        } else {
+            namingThreadFactory = options.getThreadFactory();
         }
-        ThreadFactory finalDefaultFactory = defaultFactory;
-        ThreadFactory namingThreadFactory = r -> {
-            Thread thread = finalDefaultFactory.newThread(r);
-            String name = thread.getName();
-            thread.setName("pc-" + name);
-            this.getMyId().ifPresent(id -> thread.setName("pc-" + name + "-" + id));
-            return thread;
-        };
         ThreadPoolExecutor.AbortPolicy rejectionHandler = new ThreadPoolExecutor.AbortPolicy();
         LinkedBlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>();
         return new ThreadPoolExecutor(poolSize, poolSize, 0L, MILLISECONDS, workQueue,
