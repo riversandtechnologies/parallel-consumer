@@ -20,6 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Function;
 
 import static io.confluent.csid.utils.StringUtils.msg;
@@ -74,6 +75,8 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     private final String managedThreadFactory = "java:comp/DefaultManagedThreadFactory";
+
+    private final ThreadFactory threadFactory;
 
     /**
      * Micrometer MeterRegistry
