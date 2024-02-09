@@ -1,10 +1,10 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
-import lombok.RequiredArgsConstructor;
+import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
@@ -12,18 +12,20 @@ import org.apache.kafka.common.errors.WakeupException;
 import pl.tlinkowski.unij.api.UniMaps;
 
 import java.time.Duration;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Delegate for {@link KafkaConsumer}
  */
 @Slf4j
-@RequiredArgsConstructor
 public class ConsumerManager<K, V> {
 
+    private static final Map<TopicPartition, Set<TopicPartition>> PARTITION_SET_MAP = new ConcurrentHashMap<>();
     private final Consumer<K, V> consumer;
+    private final ParallelConsumerOptions<K, V> consumerOptions;
+    private final ActionListeners<K, V> actionListeners;
 
     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
 
@@ -42,6 +44,13 @@ public class ConsumerManager<K, V> {
     private int correctPollWakeups = 0;
     private int noWakeups = 0;
     private boolean commitRequested;
+    private Iterator<TopicPartition> topicPartitionIterator;
+
+    public ConsumerManager(AbstractParallelEoSStreamProcessor<K, V> apc) {
+        this.consumerOptions = apc.getOptions();
+        this.consumer = apc.getOptions().getConsumer();
+        this.actionListeners = apc.getActionListeners();
+    }
 
     ConsumerRecords<K, V> poll(Duration requestedLongPollTimeout) {
         Duration timeoutToUse = requestedLongPollTimeout;
@@ -55,7 +64,7 @@ public class ConsumerManager<K, V> {
             pollingBroker.set(true);
             updateCache();
             log.debug("Poll starting with timeout: {}", timeoutToUse);
-            records = consumer.poll(timeoutToUse);
+            records = poll(timeoutToUse, consumerOptions.isPartitionFairnessEnabled());
             log.debug("Poll completed normally (after timeout of {}) and returned {}...", timeoutToUse, records.count());
             updateCache();
         } catch (WakeupException w) {
@@ -63,10 +72,77 @@ public class ConsumerManager<K, V> {
             log.debug("Awoken from broker poll");
             log.trace("Wakeup caller is:", w);
             records = new ConsumerRecords<>(UniMaps.of());
+        } catch (IllegalStateException ex) {
+            log.error("Failed to poll from broker", ex);
+            records = new ConsumerRecords<>(UniMaps.of());
         } finally {
             pollingBroker.set(false);
         }
         return records;
+    }
+
+    private ConsumerRecords<K, V> poll(final Duration timeoutToUse, boolean partitionFairnessEnabled) {
+        Set<TopicPartition> assignment = consumer.assignment();
+        actionListeners.refresh();
+        Set<TopicPartition> refreshedAssignment = consumer.assignment();
+        if (assignment.equals(refreshedAssignment)) {
+            if (partitionFairnessEnabled) {
+                ConsumerRecords<K, V> consumerRecords = pollWithFairness(timeoutToUse, assignment);
+                if (consumerRecords != null) {
+                    return consumerRecords;
+                }
+            } else {
+                return pollWithoutFairness(timeoutToUse);
+            }
+        }
+        return pollFromBroker(timeoutToUse);
+    }
+
+    private ConsumerRecords<K, V> pollWithoutFairness(Duration timeoutToUse) {
+        if (actionListeners.shouldPoll()) {
+            return pollFromBroker(timeoutToUse);
+        } else {
+            return actionListeners.afterPoll(Collections.emptyMap());
+        }
+    }
+
+    private ConsumerRecords<K, V> pollWithFairness(final Duration timeoutToUse, Set<TopicPartition> assignment) {
+        if (assignment != null && !assignment.isEmpty() && (topicPartitionIterator == null || !topicPartitionIterator.hasNext())) {
+            topicPartitionIterator = assignment.iterator();
+            consumer.pause(assignment);
+        }
+
+        if (topicPartitionIterator != null && topicPartitionIterator.hasNext()) {
+            TopicPartition pollTopicPartition = topicPartitionIterator.next();
+            if (actionListeners.shouldPoll(pollTopicPartition)) {
+                Set<TopicPartition> pollPartition = getPartitionSetMap(pollTopicPartition);
+                consumer.resume(pollPartition);
+                ConsumerRecords<K, V> polledRecords = pollFromBroker(timeoutToUse);
+                consumer.pause(pollPartition);
+                return polledRecords;
+            } else {
+                topicPartitionIterator = null;
+                return actionListeners.afterPoll(Collections.emptyMap());
+            }
+        }
+        return null;
+    }
+
+    private ConsumerRecords<K, V> pollFromBroker(final Duration timeoutToUse) {
+        ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
+        for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
+            records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
+        }
+        return actionListeners.afterPoll(records);
+    }
+
+    private Set<TopicPartition> getPartitionSetMap(TopicPartition topicPartition) {
+        return PARTITION_SET_MAP.computeIfAbsent(topicPartition, k -> {
+            Set<TopicPartition> pollP = new HashSet<>();
+            pollP.add(k);
+            return pollP;
+        });
     }
 
     protected void updateCache() {

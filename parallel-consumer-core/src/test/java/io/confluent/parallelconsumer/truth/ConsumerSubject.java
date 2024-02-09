@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.truth;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import com.google.common.truth.FailureMetadata;
@@ -16,7 +16,7 @@ import org.apache.kafka.common.TopicPartition;
 import pl.tlinkowski.unij.api.UniLists;
 import pl.tlinkowski.unij.api.UniSets;
 
-import javax.annotation.Generated;
+import javax.annotation.processing.Generated;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;

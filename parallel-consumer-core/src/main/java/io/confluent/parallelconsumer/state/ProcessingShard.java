@@ -1,9 +1,11 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
+import com.google.common.collect.LinkedListMultimap;
+import com.google.common.collect.ListMultimap;
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
 import io.confluent.parallelconsumer.internal.RateLimiter;
@@ -12,13 +14,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
 import static io.confluent.csid.utils.BackportUtils.toSeconds;
 import static io.confluent.csid.utils.JavaUtils.isGreaterThan;
 import static io.confluent.csid.utils.StringUtils.msg;
+import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE;
 import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.UNORDERED;
 import static lombok.AccessLevel.PRIVATE;
 
@@ -110,27 +116,38 @@ public class ProcessingShard<K, V> {
     }
 
 
-    ArrayList<WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta) {
+    ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta) {
         log.trace("Looking for work on shardQueueEntry: {}", getKey());
 
         var slowWork = new HashSet<WorkContainer<?, ?>>();
-        var workTaken = new ArrayList<WorkContainer<K, V>>();
+        ListMultimap<ShardKey, WorkContainer<K, V>> workTaken = LinkedListMultimap.create();
 
         var iterator = entries.entrySet().iterator();
+        int keyBatchSize = 0;
         while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
             var workContainer = iterator.next().getValue();
 
             if (pm.couldBeTakenAsWork(workContainer)) {
                 if (workContainer.isAvailableToTakeAsWork()) {
-                    log.trace("Taking {} as work", workContainer);
-                    workContainer.onQueueingForExecution();
-                    workTaken.add(workContainer);
+                    if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
+                        log.trace("Taking {} as work", workContainer);
+                        workContainer.onQueueingForExecution();
+                        workTaken.put(key, workContainer);
+                        keyBatchSize++;
+                    } else {
+                        break;
+                    }
                 } else {
                     log.trace("Skipping {} as work, not available to take as work", workContainer);
                     addToSlowWorkMaybe(slowWork, workContainer);
                 }
 
                 if (isOrderRestricted()) {
+                    // can't take any more work from this shard, due to ordering restrictions
+                    // processing blocked on this shard, continue to next shard
+                    log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                    break;
+                } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize >= options.getBatchSize())) {
                     // can't take any more work from this shard, due to ordering restrictions
                     // processing blocked on this shard, continue to next shard
                     log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
@@ -193,7 +210,7 @@ public class ProcessingShard<K, V> {
     }
 
     private boolean isOrderRestricted() {
-        return options.getOrdering() != UNORDERED;
+        return options.getOrdering() != UNORDERED && options.getOrdering() != KEY_BATCH_EXCLUSIVE;
     }
 
     // check if the work container is stale
