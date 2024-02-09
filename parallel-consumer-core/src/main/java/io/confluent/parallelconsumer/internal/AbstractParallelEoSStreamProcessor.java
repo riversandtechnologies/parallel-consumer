@@ -4,11 +4,13 @@ package io.confluent.parallelconsumer.internal;
  * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
+import com.google.common.collect.ListMultimap;
 import io.confluent.csid.utils.SupplierUtils;
 import io.confluent.csid.utils.TimeUtils;
 import io.confluent.parallelconsumer.*;
 import io.confluent.parallelconsumer.metrics.PCMetrics;
 import io.confluent.parallelconsumer.metrics.PCMetricsDef;
+import io.confluent.parallelconsumer.state.ShardKey;
 import io.confluent.parallelconsumer.state.WorkContainer;
 import io.confluent.parallelconsumer.state.WorkManager;
 import io.micrometer.core.instrument.Gauge;
@@ -873,7 +875,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         //
         if (state == RUNNING || state == DRAINING) {
             int delta = calculateQuantityToRequest();
-            var records = wm.getWorkIfAvailable(delta);
+            var records = wm.getWorkIfAvailableInternal(delta);
 
             gotWorkCount = records.size();
             lastWorkRequestWasFulfilled = gotWorkCount >= delta;
@@ -899,7 +901,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
      */
     protected <R> void submitWorkToPool(Function<PollContextInternal<K, V>, List<R>> usersFunction,
                                         Consumer<R> callback,
-                                        List<WorkContainer<K, V>> workToProcess) {
+                                        ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
         if (state.equals(CLOSING) || state.equals(CLOSED)) {
             log.debug("Not submitting new work as Parallel Consumer is in {} state, incoming work: {}, Pool stats: {}", state, workToProcess.size(), workerThreadPool.get());
         }
@@ -941,37 +943,75 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
     }
 
-    private List<List<WorkContainer<K, V>>> makeBatches(List<WorkContainer<K, V>> workToProcess) {
+    private List<List<WorkContainer<K, V>>> makeBatches(ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
         int maxBatchSize = options.getBatchSize();
         long maxBatchBytes = options.getBatchBytes();
         return partition(workToProcess, maxBatchSize, maxBatchBytes);
     }
 
-    private static <K, V> List<List<WorkContainer<K, V>>> partition(List<WorkContainer<K, V>> sourceCollection, int maxBatchSize, final long maxBatchBytes) {
+    private <K, V> List<List<WorkContainer<K, V>>> partition(ListMultimap<ShardKey, WorkContainer<K, V>> sourceCollection, int maxBatchSize, final long maxBatchBytes) {
         List<List<WorkContainer<K, V>>> listOfBatches = new ArrayList<>();
         List<WorkContainer<K, V>> batchInConstruction = new ArrayList<>();
-        long batchBytes = 0;
         //
-        for (final WorkContainer<K, V> toProcess : sourceCollection) {
-            long crsize = toProcess.getCr().serializedValueSize() + toProcess.getCr().serializedKeySize();
-            batchBytes += crsize;
-            if (batchBytes >= maxBatchBytes && !batchInConstruction.isEmpty()) {
-                listOfBatches.add(batchInConstruction);
-                batchInConstruction = new ArrayList<>();
-                batchBytes = crsize;
+        if (options.getOrdering().equals(ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE) && maxBatchSize > 1) {
+            Map<ShardKey, List<WorkContainer<K, V>>> shardKeyListMap = new HashMap<>();
+            Map<ShardKey, Integer> keyCounts = new HashMap<>();
+            for (final ShardKey shardKey : sourceCollection.keySet()) {
+                keyCounts.put(shardKey, sourceCollection.get(shardKey).size());
+                shardKeyListMap.put(shardKey, sourceCollection.get(shardKey));
             }
-            batchInConstruction.add(toProcess);
-
-            //
-            if (batchInConstruction.size() == maxBatchSize) {
-                listOfBatches.add(batchInConstruction);
-                batchInConstruction = new ArrayList<>();
+            while (!keyCounts.isEmpty()) {
+                Iterator<Map.Entry<ShardKey, Integer>> entryIterator = keyCounts.entrySet().iterator();
+                boolean added = false;
+                while (entryIterator.hasNext()) {
+                    Map.Entry<ShardKey, Integer> entry = entryIterator.next();
+                    int keyCount = entry.getValue();
+                    if (batchInConstruction.size() >= maxBatchSize) {
+                        listOfBatches.add(batchInConstruction);
+                        batchInConstruction = new ArrayList<>();
+                        added = false;
+                    }
+                    if (keyCount >= maxBatchSize) {
+                        listOfBatches.add(shardKeyListMap.get(entry.getKey()));
+                        entryIterator.remove();
+                    } else if ((batchInConstruction.size() + keyCount) <= maxBatchSize) {
+                        batchInConstruction.addAll(shardKeyListMap.get(entry.getKey()));
+                        entryIterator.remove();
+                        added = true;
+                    }
+                }
+                if (!added && !batchInConstruction.isEmpty()) {
+                    listOfBatches.add(batchInConstruction);
+                    batchInConstruction = new ArrayList<>();
+                }
             }
-        }
+            // add partial tail
+            if (!batchInConstruction.isEmpty()) {
+                listOfBatches.add(batchInConstruction);
+            }
+        } else {
+            long batchBytes = 0;
+            for (final WorkContainer<K, V> toProcess : sourceCollection.values()) {
+                long crsize = toProcess.getCr().serializedValueSize() + toProcess.getCr().serializedKeySize();
+                batchBytes += crsize;
+                if (batchBytes >= maxBatchBytes && !batchInConstruction.isEmpty()) {
+                    listOfBatches.add(batchInConstruction);
+                    batchInConstruction = new ArrayList<>();
+                    batchBytes = crsize;
+                }
+                batchInConstruction.add(toProcess);
 
-        // add partial tail
-        if (!batchInConstruction.isEmpty()) {
-            listOfBatches.add(batchInConstruction);
+                //
+                if (batchInConstruction.size() >= maxBatchSize) {
+                    listOfBatches.add(batchInConstruction);
+                    batchInConstruction = new ArrayList<>();
+                    batchBytes = 0;
+                }
+            }
+            // add partial tail
+            if (!batchInConstruction.isEmpty()) {
+                listOfBatches.add(batchInConstruction);
+            }
         }
 
         if (log.isDebugEnabled()) {
