@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
@@ -27,10 +27,15 @@ public class ShardKey {
 
     public static ShardKey of(ConsumerRecord<?, ?> rec, ProcessingOrder ordering) {
         return switch (ordering) {
+            case KEY_BATCH_EXCLUSIVE -> ofKeyBatchExclusive(rec);
             case KEY_EXCLUSIVE -> ofKeyExclusive(rec);
             case KEY -> ofKey(rec);
             case PARTITION, UNORDERED -> ofTopicPartition(rec);
         };
+    }
+
+    public static KeyBatchExclusiveOrderedKey ofKeyBatchExclusive(ConsumerRecord<?, ?> rec) {
+        return new KeyBatchExclusiveOrderedKey(rec);
     }
 
     public static KeyExclusiveOrderedKey ofKeyExclusive(ConsumerRecord<?, ?> rec) {
@@ -43,6 +48,21 @@ public class ShardKey {
 
     public static ShardKey ofTopicPartition(final ConsumerRecord<?, ?> rec) {
         return new TopicPartitionKey(new TopicPartition(rec.topic(), rec.partition()));
+    }
+
+    @Value
+    @RequiredArgsConstructor
+    @EqualsAndHashCode(callSuper = true)
+    public static class KeyBatchExclusiveOrderedKey extends ShardKey {
+
+        /**
+         * The key of the record being referenced. Nullable if record is produced with a null key.
+         */
+        Object key;
+
+        public KeyBatchExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
+            this(rec.key());
+        }
     }
 
     @Value
