@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Function;
 
 import static io.confluent.csid.utils.StringUtils.msg;
@@ -63,6 +64,8 @@ public class ParallelConsumerOptions<K, V> {
      */
     private final Producer<K, V> producer;
 
+    private final boolean partitionFairnessEnabled;
+
     /**
      * Path to Managed executor service for Java EE
      */
@@ -74,6 +77,8 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     private final String managedThreadFactory = "java:comp/DefaultManagedThreadFactory";
+
+    private final ThreadFactory threadFactory;
 
     /**
      * Micrometer MeterRegistry
@@ -117,7 +122,20 @@ public class ParallelConsumerOptions<K, V> {
          * Process messages in key order. Concurrency is at most the number of unique keys in a topic, limited by the
          * max concurrency or uncommitted settings.
          */
-        KEY
+        KEY,
+
+        /**
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
+         * limited by the max concurrency or uncommitted settings.
+         */
+        KEY_EXCLUSIVE,
+
+        /**
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
+         * limited by the max concurrency or uncommitted settings. Each batch is having same partition key. And only 1
+         * batch with same keys is in transit to avoid conflicts
+         */
+        KEY_BATCH_EXCLUSIVE
     }
 
     /**
@@ -418,6 +436,16 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     private final Integer batchSize = 1;
+
+    /**
+     * We can limit max bytes present in one batch. In case if batch size is set and max bytes is not set, then default
+     * max bytes is 1MB. If {@link ParallelConsumerOptions#getOrdering()} is KEY_BATCH_EXCLUSIVE then max bytes config
+     * is not consider to divide into batches
+     *
+     * @see ParallelConsumerOptions#getBatchBytes()
+     */
+    @Builder.Default
+    private final Long batchBytes = 1000000L;
 
     /**
      * Configure the amount of delay a record experiences, before a warning is logged.
