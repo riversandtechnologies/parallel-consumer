@@ -85,7 +85,7 @@ public class ConsumerManager<K, V> {
         Set<TopicPartition> assignment = consumer.assignment();
         actionListeners.refresh();
         Set<TopicPartition> refreshedAssignment = consumer.assignment();
-        if (assignment.equals(refreshedAssignment)) {
+        if (!assignment.isEmpty() && assignment.equals(refreshedAssignment)) {
             if (partitionFairnessEnabled) {
                 ConsumerRecords<K, V> consumerRecords = pollWithFairness(timeoutToUse, assignment);
                 if (consumerRecords != null) {
@@ -121,7 +121,6 @@ public class ConsumerManager<K, V> {
                 consumer.pause(pollPartition);
                 return polledRecords;
             } else {
-                topicPartitionIterator = null;
                 return actionListeners.afterPoll(Collections.emptyMap());
             }
         }
