@@ -26,7 +26,6 @@ public class ConsumerManager<K, V> {
     private final Consumer<K, V> consumer;
     private final ParallelConsumerOptions<K, V> consumerOptions;
     private final ActionListeners<K, V> actionListeners;
-
     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
 
 
@@ -78,6 +77,11 @@ public class ConsumerManager<K, V> {
         } finally {
             pollingBroker.set(false);
         }
+
+        if (consumerOptions.getWaitPollingStrategy() != null) {
+            consumerOptions.getWaitPollingStrategy().execute(records.count());
+        }
+
         return records;
     }
 

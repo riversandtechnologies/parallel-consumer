@@ -10,13 +10,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class ActionListeners<K, V> {
     private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
-    private final Map<TopicPartition, List<ConsumerRecord<K, V>>> bufferRecords = new HashMap<>();
 
     public void refresh() {
         for (final ActionListener<K, V> actionListener : actionListeners) {
@@ -49,7 +47,23 @@ public class ActionListeners<K, V> {
         return new ConsumerRecords<K, V>(records);
     }
 
-    public void registerListener(ActionListener<K, V> actionListener) {
+    public void beforeFunctionCall(final TopicPartition pollTopicPartition) {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.beforeFunctionCall(pollTopicPartition);
+        }
+    }
+
+    public void afterFunctionCall(final TopicPartition pollTopicPartition) {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.afterFunctionCall(pollTopicPartition);
+        }
+    }
+
+    public boolean isEmpty() {
+        return actionListeners.isEmpty();
+    }
+
+    void registerListener(ActionListener<K, V> actionListener) {
         if (actionListener != null && actionListener.isEnabled()) {
             actionListeners.add(actionListener);
         }

@@ -448,6 +448,15 @@ public class ParallelConsumerOptions<K, V> {
     private final Long batchBytes = 1000000L;
 
     /**
+     * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not
+     * wait at all if not configured.
+     *
+     * @see ParallelConsumerOptions#getWaitPollingStrategy()
+     */
+    @Builder.Default
+    private WaitPollingStrategy waitPollingStrategy = null;
+
+    /**
      * Configure the amount of delay a record experiences, before a warning is logged.
      */
     @Builder.Default
