@@ -14,11 +14,15 @@ public interface ActionListener<K, V> {
 
     void refresh();
 
-    public boolean shouldPoll();
+    boolean shouldPoll();
 
-    public boolean shouldPoll(final TopicPartition pollTopicPartition);
+    boolean shouldPoll(final TopicPartition pollTopicPartition);
 
-    public void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
+    void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
+
+    void beforeFunctionCall(final TopicPartition pollTopicPartition);
+
+    void afterFunctionCall(final TopicPartition pollTopicPartition);
 
     boolean isEnabled();
 }

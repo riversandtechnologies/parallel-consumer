@@ -603,7 +603,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
                     //Requesting threads shutdown immediately - inflight threads will be interrupted at this point.
                     workerThreadPool.get().shutdownNow();
                     //Give a second for any interrupt handling / resource cleanup in user functions
-                    workerThreadPool.get().awaitTermination(toSeconds(Duration.ofSeconds(1)), SECONDS);
+                    workerThreadPool.get().awaitTermination(toSeconds(Duration.ofSeconds(5)), SECONDS);
                 }
             } catch (InterruptedException e) {
                 log.error("InterruptedException", e);
