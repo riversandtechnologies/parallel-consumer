@@ -64,8 +64,6 @@ public class ParallelConsumerOptions<K, V> {
      */
     private final Producer<K, V> producer;
 
-    private final boolean partitionFairnessEnabled;
-
     /**
      * Path to Managed executor service for Java EE
      */

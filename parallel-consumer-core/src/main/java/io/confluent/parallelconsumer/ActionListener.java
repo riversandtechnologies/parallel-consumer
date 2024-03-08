@@ -9,6 +9,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public interface ActionListener<K, V> {
 
@@ -16,7 +17,7 @@ public interface ActionListener<K, V> {
 
     boolean shouldPoll();
 
-    boolean shouldPoll(final TopicPartition pollTopicPartition);
+    Set<TopicPartition> pausePartitions();
 
     void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
 
