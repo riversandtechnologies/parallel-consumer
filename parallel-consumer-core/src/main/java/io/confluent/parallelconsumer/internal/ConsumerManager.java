@@ -81,25 +81,17 @@ public class ConsumerManager<K, V> {
     }
 
     private ConsumerRecords<K, V> pollWithActionListener(final Duration timeoutToUse) {
-        ConsumerRecords<K, V> consumerRecords = null;
-        Set<TopicPartition> assignment = consumer.assignment();
         actionListeners.refresh();
         if (actionListeners.shouldPoll()) {
-            Set<TopicPartition> refreshedAssignment = consumer.assignment();
-            if (!refreshedAssignment.isEmpty() && assignment.equals(refreshedAssignment)) {
-                Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
-                ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
-                Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
-                for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
-                    records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
-                }
-                consumerRecords = actionListeners.afterPoll(records);
-                consumer.resume(pausedPartitions);
+            Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
+            ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
+            Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
+            for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
+                records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
             }
-
-            if (consumerRecords != null) {
-                return consumerRecords;
-            }
+            ConsumerRecords<K, V> consumerRecords = actionListeners.afterPoll(records);
+            consumer.resume(pausedPartitions);
+            return consumerRecords;
         }
         return new ConsumerRecords<>(UniMaps.of());
     }

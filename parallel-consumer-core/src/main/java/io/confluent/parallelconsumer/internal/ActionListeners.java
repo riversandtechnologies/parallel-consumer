@@ -57,6 +57,12 @@ public class ActionListeners<K, V> {
         }
     }
 
+    public void functionError() {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.functionError();
+        }
+    }
+
     public void afterFunctionCall(final TopicPartition pollTopicPartition) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             actionListener.afterFunctionCall(pollTopicPartition);

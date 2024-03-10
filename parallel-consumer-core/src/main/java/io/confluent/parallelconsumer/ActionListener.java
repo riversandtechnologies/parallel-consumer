@@ -13,6 +13,8 @@ import java.util.Set;
 
 public interface ActionListener<K, V> {
 
+    boolean isEnabled();
+
     void refresh();
 
     boolean shouldPoll();
@@ -23,7 +25,7 @@ public interface ActionListener<K, V> {
 
     void beforeFunctionCall(final TopicPartition pollTopicPartition);
 
-    void afterFunctionCall(final TopicPartition pollTopicPartition);
+    void functionError();
 
-    boolean isEnabled();
+    void afterFunctionCall(final TopicPartition pollTopicPartition);
 }
