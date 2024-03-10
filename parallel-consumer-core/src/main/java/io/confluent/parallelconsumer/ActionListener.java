@@ -9,20 +9,23 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public interface ActionListener<K, V> {
+
+    boolean isEnabled();
 
     void refresh();
 
     boolean shouldPoll();
 
-    boolean shouldPoll(final TopicPartition pollTopicPartition);
+    Set<TopicPartition> pausePartitions();
 
     void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
 
     void beforeFunctionCall(final TopicPartition pollTopicPartition);
 
-    void afterFunctionCall(final TopicPartition pollTopicPartition);
+    void functionError();
 
-    boolean isEnabled();
+    void afterFunctionCall(final TopicPartition pollTopicPartition);
 }

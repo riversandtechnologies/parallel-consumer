@@ -5,16 +5,20 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ActionListener;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ActionListeners<K, V> {
     private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
+    private final Consumer<K, V> consumer;
+
+    public ActionListeners(Consumer<K, V> consumer) {
+        this.consumer = consumer;
+    }
 
     public void refresh() {
         for (final ActionListener<K, V> actionListener : actionListeners) {
@@ -31,13 +35,13 @@ public class ActionListeners<K, V> {
         return true;
     }
 
-    public boolean shouldPoll(final TopicPartition pollTopicPartition) {
+    public Set<TopicPartition> pausePartitions() {
+        Set<TopicPartition> pausedPartitions = new HashSet<>();
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            if (!actionListener.shouldPoll(pollTopicPartition)) {
-                return false;
-            }
+            pausedPartitions.addAll(actionListener.pausePartitions());
         }
-        return true;
+        consumer.pause(pausedPartitions);
+        return pausedPartitions;
     }
 
     public ConsumerRecords<K, V> afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
@@ -50,6 +54,12 @@ public class ActionListeners<K, V> {
     public void beforeFunctionCall(final TopicPartition pollTopicPartition) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             actionListener.beforeFunctionCall(pollTopicPartition);
+        }
+    }
+
+    public void functionError() {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.functionError();
         }
     }
 

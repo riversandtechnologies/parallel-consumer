@@ -284,7 +284,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         this.shutdownTimeout = options.getShutdownTimeout();
         this.drainTimeout = options.getDrainTimeout();
         this.consumer = options.getConsumer();
-        actionListeners = new ActionListeners<>();
+        actionListeners = new ActionListeners<>(consumer);
 
         validateConfiguration();
 
