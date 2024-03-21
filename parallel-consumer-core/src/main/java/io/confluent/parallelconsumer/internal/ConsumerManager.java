@@ -81,6 +81,9 @@ public class ConsumerManager<K, V> {
     }
 
     private ConsumerRecords<K, V> pollWithActionListener(final Duration timeoutToUse) {
+        if (actionListeners.isAssignmentChanged()) {
+            actionListeners.clear();
+        }
         actionListeners.refresh();
         if (actionListeners.shouldPoll()) {
             Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();

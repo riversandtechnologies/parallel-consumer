@@ -15,6 +15,8 @@ public interface ActionListener<K, V> {
 
     boolean isEnabled();
 
+    boolean isAssignmentChanged();
+
     void refresh();
 
     boolean shouldPoll();
@@ -27,5 +29,7 @@ public interface ActionListener<K, V> {
 
     void functionError();
 
-    void afterFunctionCall(final TopicPartition pollTopicPartition);
+    void afterFunctionCall(final TopicPartition pollTopicPartition, int timeTaken);
+
+    void clear();
 }

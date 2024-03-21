@@ -20,6 +20,21 @@ public class ActionListeners<K, V> {
         this.consumer = consumer;
     }
 
+    public boolean isAssignmentChanged() {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            if (actionListener.isAssignmentChanged()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void clear() {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.clear();
+        }
+    }
+
     public void refresh() {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             actionListener.refresh();
@@ -63,9 +78,9 @@ public class ActionListeners<K, V> {
         }
     }
 
-    public void afterFunctionCall(final TopicPartition pollTopicPartition) {
+    public void afterFunctionCall(final TopicPartition pollTopicPartition, int timeTaken) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.afterFunctionCall(pollTopicPartition);
+            actionListener.afterFunctionCall(pollTopicPartition, timeTaken);
         }
     }
 
