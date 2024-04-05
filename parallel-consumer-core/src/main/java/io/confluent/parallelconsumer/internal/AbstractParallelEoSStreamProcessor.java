@@ -80,6 +80,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
     @Getter
     private ActionListeners<K, V> actionListeners;
 
+    private SystemTimer systemTimer;
+
     /**
      * Injectable clock for testing
      */
@@ -316,6 +318,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
         //Initialize metrics for this class once all the objects are created
         initMetrics();
+
+        systemTimer = new SystemTimer(0, 300000, MILLISECONDS);
     }
 
     private void initMetrics() {
@@ -830,7 +834,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
      */
     private void maybeWakeupPoller() {
         if (state == RUNNING) {
-            if (!wm.isSufficientlyLoaded() && brokerPollSubsystem.isPausedForThrottling()) {
+            if (systemTimer.isExpiredResetOnTrue() && !getActionListeners().isPausing() && !wm.isSufficientlyLoaded() && brokerPollSubsystem.isPausedForThrottling()) {
                 log.debug("Found Poller paused with not enough front loaded messages, ensuring poller is awake (mail: {} vs target: {})",
                         wm.getNumberOfWorkQueuedInShardsAwaitingSelection(),
                         options.getTargetAmountOfRecordsInFlight());

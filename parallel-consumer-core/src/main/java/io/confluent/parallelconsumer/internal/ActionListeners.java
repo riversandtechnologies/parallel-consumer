@@ -5,6 +5,7 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ActionListener;
+import lombok.Getter;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -15,6 +16,8 @@ import java.util.*;
 public class ActionListeners<K, V> {
     private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
     private final Consumer<K, V> consumer;
+    @Getter
+    private boolean isPausing;
 
     public ActionListeners(Consumer<K, V> consumer) {
         this.consumer = consumer;
@@ -55,7 +58,12 @@ public class ActionListeners<K, V> {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             pausedPartitions.addAll(actionListener.pausePartitions());
         }
-        consumer.pause(pausedPartitions);
+        if (pausedPartitions.isEmpty()) {
+            isPausing = false;
+        } else {
+            consumer.pause(pausedPartitions);
+            isPausing = true;
+        }
         return pausedPartitions;
     }
 
