@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 /**
  * Delegate for {@link KafkaConsumer}
  */
@@ -24,6 +26,7 @@ public class ConsumerManager<K, V> {
     private final ParallelConsumerOptions<K, V> consumerOptions;
     private final ActionListeners<K, V> actionListeners;
     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
+    private SystemTimer systemTimer;
 
     /**
      * Since Kakfa 2.7, multi-threaded access to consumer group metadata was blocked, so before and after polling, save
@@ -44,6 +47,7 @@ public class ConsumerManager<K, V> {
         this.consumerOptions = apc.getOptions();
         this.consumer = apc.getOptions().getConsumer();
         this.actionListeners = apc.getActionListeners();
+        systemTimer = new SystemTimer(0, 300000, MILLISECONDS);
     }
 
     ConsumerRecords<K, V> poll(Duration requestedLongPollTimeout) {
@@ -55,9 +59,6 @@ public class ConsumerManager<K, V> {
                 timeoutToUse = Duration.ofMillis(1);// disable long poll, as commit needs performing
                 commitRequested = false;
             }
-            pollingBroker.set(true);
-            updateCache();
-            log.debug("Poll starting with timeout: {}", timeoutToUse);
             records = pollWithActionListener(timeoutToUse);
             log.debug("Poll completed normally (after timeout of {}) and returned {}...", timeoutToUse, records.count());
             updateCache();
@@ -87,6 +88,11 @@ public class ConsumerManager<K, V> {
         actionListeners.refresh();
         if (actionListeners.shouldPoll()) {
             Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
+
+            pollingBroker.set(true);
+            updateCache();
+            log.debug("Poll starting with timeout: {}", timeoutToUse);
+
             ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
             Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
             for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
@@ -112,7 +118,7 @@ public class ConsumerManager<K, V> {
     public void wakeup() {
         // boolean reduces the chances of a mis-timed call to wakeup, but doesn't prevent all spurious wake up calls to other methods like #commit
         // if the call to wakeup happens /after/ the check for a wake up state inside #poll, then the next call will through the wake up exception (i.e. #commit)
-        if (pollingBroker.get()) {
+        if (pollingBroker.get() && systemTimer.isExpiredResetOnTrue()) {
             log.debug("Waking up consumer");
             consumer.wakeup();
         }
