@@ -808,8 +808,13 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         // sanity - supervise the poller
         brokerPollSubsystem.supervise();
 
-        // thread yield for spin lock avoidance
-        Duration duration = Duration.ofMillis(1);
+        Duration duration;
+        if (options.getBatchSize() > 1) {
+            duration = Duration.ofMillis(options.getBatchWindowTimeInMs());
+        } else {
+            // thread yield for spin lock avoidance
+            duration = Duration.ofMillis(1);
+        }
         try {
             Thread.sleep(duration.toMillis());
         } catch (InterruptedException e) {

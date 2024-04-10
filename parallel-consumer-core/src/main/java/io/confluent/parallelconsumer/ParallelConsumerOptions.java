@@ -130,8 +130,8 @@ public class ParallelConsumerOptions<K, V> {
 
         /**
          * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
-         * limited by the max concurrency or uncommitted settings. Each batch is having same partition key. And only 1
-         * batch with same keys is in transit to avoid conflicts
+         * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
+         * conflicts
          */
         KEY_BATCH_EXCLUSIVE
     }
@@ -444,6 +444,15 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     private final Long batchBytes = 1000000L;
+
+    /**
+     * We can create batches after certain time. In case if batch size is not getting full, we can delay creating
+     * batches and try to accumulate as many requests as possible. In effect only if batch size is higher than 1.
+     *
+     * @see ParallelConsumerOptions#getBatchWindowTimeInMs()
+     */
+    @Builder.Default
+    private final Integer batchWindowTimeInMs = 1;
 
     /**
      * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not
