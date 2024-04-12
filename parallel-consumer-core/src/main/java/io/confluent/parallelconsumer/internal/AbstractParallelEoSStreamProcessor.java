@@ -809,7 +809,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         brokerPollSubsystem.supervise();
 
         Duration duration;
-        if (options.getBatchSize() > 1) {
+        if (options.getBatchSize() > 1 && wm.getNumberOfWorkQueuedInShardsAwaitingSelection() < options.getBatchSize()) {
             duration = Duration.ofMillis(options.getBatchWindowTimeInMs());
         } else {
             // thread yield for spin lock avoidance
