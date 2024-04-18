@@ -1,0 +1,22 @@
+name: Cleanup SDK
+
+on:
+  push:
+    tags:
+      - "rm-*-rs"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout parallel-consumer-parent
+        uses: actions/checkout@v4
+      - name: Get tag
+        run: |
+          echo VERSION=$(${GITHUB_REF_NAME:1} | sed -e 's/rm-//') >> $GITHUB_ENV && echo $VERSION
+      - name: Cleanup Parallel consumer lib
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'parallel-consumer-core'
+          package-type: 'jar'
+          token: ${{ secrets.EDS_BUILD }}
