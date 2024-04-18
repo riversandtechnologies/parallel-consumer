@@ -24,9 +24,6 @@ jobs:
       - name: Get tag
         run: |
           echo VERSION=${GITHUB_REF_NAME:1} >> $GITHUB_ENV && echo $VERSION
-      - name: Print env
-        run: |
-          echo Publishing ${{ env.VERSION }}
       - name: Set up Eclipse Temurin JDK 21
         uses: actions/setup-java@v4
         with:
