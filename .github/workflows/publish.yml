@@ -6,7 +6,7 @@ name: Publish parallel-consumer-parent
 on:
   push:
     tags:
-      - "*-rs"
+      - "0*-rs"
   pull_request:
     branches:
       - master
@@ -31,7 +31,7 @@ jobs:
           java-version: 21
           cache: 'maven'
       - name: Create Package
-        run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml
+        run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml -pl .,parallel-consumer-core
       - name: Publish Package
         env:
           EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD }}
