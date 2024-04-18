@@ -4,6 +4,9 @@
 name: Publish parallel-consumer-parent
 
 on:
+  push:
+    tags:
+      - "*-rs"
   pull_request:
     branches:
       - master
@@ -18,26 +21,23 @@ jobs:
     steps:
       - name: Checkout parallel-consumer-parent
         uses: actions/checkout@v4
-      - name: Find the version from the project version
+      - name: Get tag
         run: |
-          RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo VERSION=${GITHUB_REF_NAME:1} >> $GITHUB_ENV && echo $VERSION
       - name: Print env
         run: |
-          echo Publishing ${RELEASE_VERSION}
+          echo Publishing ${{ env.VERSION }}
       - name: Set up Eclipse Temurin JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: 21
           cache: 'maven'
-          cache-dependency-path: '**/pom.xml'
       - name: Create Package
-        env:
-          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD_TOKEN }}
-        run: mvn clean package -DskipTests --file pom.xml --settings settings.xml
+        run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml
       - name: Publish Package
         env:
-          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD_TOKEN }}
+          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD }}
+          REGISTRY_URL: "https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1"
         run: |
-          mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-core -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
-          mvn -B deploy:deploy-file -Durl=https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1 -DrepositoryId=dp.internal -Dfile=parallel-consumer-react/target/parallel-consumer-react-${RELEASE_VERSION}.jar -DgroupId=com.riversand.dataplatform -DartifactId=parallel-consumer-react -Dversion=${RELEASE_VERSION} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+          mvn -B deploy:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-${{ env.VERSION }}.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
