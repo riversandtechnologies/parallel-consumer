@@ -872,14 +872,23 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
         //
         if (state == RUNNING || state == DRAINING) {
-            int delta = calculateQuantityToRequest();
-            var records = wm.getWorkIfAvailableInternal(delta);
+            if (getActionListeners().shouldProcess()) {
+                int delta = calculateQuantityToRequest();
+                var records = wm.getWorkIfAvailableInternal(delta);
 
-            gotWorkCount = records.size();
-            lastWorkRequestWasFulfilled = gotWorkCount >= delta;
+                gotWorkCount = records.size();
+                lastWorkRequestWasFulfilled = gotWorkCount >= delta;
 
-            log.trace("Loop: Submit to pool");
-            submitWorkToPool(userFunction, callback, records);
+                log.trace("Loop: Submit to pool");
+                submitWorkToPool(userFunction, callback, records);
+            } else {
+                try {
+                    Thread.sleep(100);
+                } catch (Exception ex) {
+                    log.error("Thread interrupted before submitting to pool");
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
 
         //
@@ -931,9 +940,18 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
                                            final List<WorkContainer<K, V>> batch) {
         // for each record, construct dispatch to the executor and capture a Future
         log.trace("Sending work ({}) to pool", batch);
+
+        for (final WorkContainer<K, V> workContainer : batch) {
+            getActionListeners().beforeFunctionCall(workContainer.getCr());
+        }
+
         Future outputRecordFuture = workerThreadPool.get().submit(() -> {
             addInstanceMDC();
-            return runUserFunction(usersFunction, callback, batch);
+            final List<Tuple<ConsumerRecord<K, V>, R>> tuples = runUserFunction(usersFunction, callback, batch);
+            for (final WorkContainer<K, V> workContainer : batch) {
+                getActionListeners().afterFunctionCall(workContainer.getCr());
+            }
+            return tuples;
         });
         // for a batch, each message in the batch shares the same result
         for (final WorkContainer<K, V> workContainer : batch) {
@@ -1341,6 +1359,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
             for (var wc : workContainerBatch) {
                 wc.onUserFunctionFailure(e);
                 addToMailbox(context, wc); // always add on error
+                getActionListeners().functionError(wc.getCr());
             }
             throw e; // trow again to make the future failed
         } finally {

@@ -3,7 +3,7 @@ name: Cleanup SDK
 on:
   push:
     tags:
-      - "rm-*"
+      - "rm-0*-rs"
 
 jobs:
   build:
@@ -20,4 +20,4 @@ jobs:
           package-version-ids: "${{ env.VERSION }}"
           package-name: 'parallel-consumer-core'
           package-type: 'jar'
-          token: ${{ secrets.EDS_BUILD }}
+          token: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}

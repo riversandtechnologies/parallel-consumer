@@ -8,6 +8,7 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
+import io.confluent.parallelconsumer.internal.ActionListeners;
 import io.confluent.parallelconsumer.internal.RateLimiter;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -116,7 +117,7 @@ public class ProcessingShard<K, V> {
     }
 
 
-    ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta) {
+    ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta, ActionListeners<K, V> actionListeners) {
         log.trace("Looking for work on shardQueueEntry: {}", getKey());
 
         var slowWork = new HashSet<WorkContainer<?, ?>>();
@@ -127,40 +128,44 @@ public class ProcessingShard<K, V> {
         while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
             var workContainer = iterator.next().getValue();
 
-            if (pm.couldBeTakenAsWork(workContainer)) {
-                if (workContainer.isAvailableToTakeAsWork()) {
-                    if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
-                        log.trace("Taking {} as work", workContainer);
-                        workContainer.onQueueingForExecution();
-                        workTaken.put(key, workContainer);
-                        keyBatchSize++;
+            if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
+                if (pm.couldBeTakenAsWork(workContainer)) {
+                    if (workContainer.isAvailableToTakeAsWork()) {
+                        if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
+                            log.trace("Taking {} as work", workContainer);
+                            workContainer.onQueueingForExecution();
+                            workTaken.put(key, workContainer);
+                            keyBatchSize++;
+                        } else {
+                            break;
+                        }
                     } else {
+                        log.trace("Skipping {} as work, not available to take as work", workContainer);
+                        addToSlowWorkMaybe(slowWork, workContainer);
+                    }
+
+                    if (isOrderRestricted()) {
+                        // can't take any more work from this shard, due to ordering restrictions
+                        // processing blocked on this shard, continue to next shard
+                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                        break;
+                    } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize >= options.getBatchSize())) {
+                        // can't take any more work from this shard, due to ordering restrictions
+                        // processing blocked on this shard, continue to next shard
+                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
                         break;
                     }
                 } else {
-                    log.trace("Skipping {} as work, not available to take as work", workContainer);
-                    addToSlowWorkMaybe(slowWork, workContainer);
-                }
-
-                if (isOrderRestricted()) {
-                    // can't take any more work from this shard, due to ordering restrictions
-                    // processing blocked on this shard, continue to next shard
-                    log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
-                    break;
-                } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize >= options.getBatchSize())) {
-                    // can't take any more work from this shard, due to ordering restrictions
-                    // processing blocked on this shard, continue to next shard
-                    log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                    // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
+                    //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
+                    //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
+                    //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
+                    //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
+                    //  matter.
+                    log.trace("Partition for shard {} is blocked for work taking, stopping shard scan", this);
                     break;
                 }
             } else {
-                // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
-                //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
-                //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
-                //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
-                //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
-                //  matter.
-                log.trace("Partition for shard {} is blocked for work taking, stopping shard scan", this);
                 break;
             }
         }

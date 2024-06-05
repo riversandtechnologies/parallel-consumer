@@ -34,7 +34,7 @@ jobs:
         run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml -pl .,parallel-consumer-core
       - name: Publish Package
         env:
-          EDS_BUILD_TOKEN: ${{ secrets.EDS_BUILD }}
+          EDS_BUILD_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
           REGISTRY_URL: "https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1"
         run: |
-          mvn -B deploy:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-${{ env.VERSION }}.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+          mvn -B deploy:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.2.8-rs.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml

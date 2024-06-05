@@ -67,7 +67,7 @@ public class PCModule<K, V> {
 
     protected ConsumerManager<K, V> consumerManager() {
         if (consumerManager == null) {
-            consumerManager = new ConsumerManager<>(parallelEoSStreamProcessor);
+            consumerManager = new ConsumerManager<>(pc());
         }
         return consumerManager;
     }
@@ -82,7 +82,7 @@ public class PCModule<K, V> {
         return workManager;
     }
 
-    protected AbstractParallelEoSStreamProcessor<K, V> pc() {
+    public AbstractParallelEoSStreamProcessor<K, V> pc() {
         if (parallelEoSStreamProcessor == null) {
             parallelEoSStreamProcessor = new ParallelEoSStreamProcessor<>(options(), this);
         }
