@@ -32,21 +32,15 @@ public class ActionListeners<K, V> {
         return false;
     }
 
-    public void clear() {
-        for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.clear();
-        }
-    }
-
     public void refresh() {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             actionListener.refresh();
         }
     }
 
-    public boolean shouldPoll() {
+    public boolean shouldProcess() {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            if (!actionListener.shouldPoll()) {
+            if (!actionListener.shouldProcess()) {
                 return false;
             }
         }
@@ -74,21 +68,36 @@ public class ActionListeners<K, V> {
         return new ConsumerRecords<K, V>(records);
     }
 
-    public void beforeFunctionCall(final TopicPartition pollTopicPartition) {
+    public boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.beforeFunctionCall(pollTopicPartition);
+            if (!actionListener.couldBeTakenAsWork(consumerRecord)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public void beforeFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.beforeFunctionCall(consumerRecord);
         }
     }
 
-    public void functionError() {
+    public void functionError(final ConsumerRecord<K, V> consumerRecord) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.functionError();
+            actionListener.functionError(consumerRecord);
         }
     }
 
-    public void afterFunctionCall(final TopicPartition pollTopicPartition, int timeTaken) {
+    public void afterFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.afterFunctionCall(pollTopicPartition, timeTaken);
+            actionListener.afterFunctionCall(consumerRecord);
+        }
+    }
+
+    public void clear() {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.clear();
         }
     }
 

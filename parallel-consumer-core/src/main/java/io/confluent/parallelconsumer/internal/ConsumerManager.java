@@ -86,7 +86,7 @@ public class ConsumerManager<K, V> {
             actionListeners.clear();
         }
         actionListeners.refresh();
-        if (actionListeners.shouldPoll()) {
+        if (actionListeners.shouldProcess()) {
             Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
 
             pollingBroker.set(true);

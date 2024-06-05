@@ -19,17 +19,19 @@ public interface ActionListener<K, V> {
 
     void refresh();
 
-    boolean shouldPoll();
+    boolean shouldProcess();
 
     Set<TopicPartition> pausePartitions();
 
     void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
 
-    void beforeFunctionCall(final TopicPartition pollTopicPartition);
+    boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord);
 
-    void functionError();
+    void beforeFunctionCall(final ConsumerRecord<K, V> consumerRecord);
 
-    void afterFunctionCall(final TopicPartition pollTopicPartition, int timeTaken);
+    void functionError(final ConsumerRecord<K, V> consumerRecord);
+
+    void afterFunctionCall(final ConsumerRecord<K, V> consumerRecord);
 
     void clear();
 }
