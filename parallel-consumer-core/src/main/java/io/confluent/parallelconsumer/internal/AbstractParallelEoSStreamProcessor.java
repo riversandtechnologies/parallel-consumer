@@ -947,11 +947,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
         Future outputRecordFuture = workerThreadPool.get().submit(() -> {
             addInstanceMDC();
-            final List<Tuple<ConsumerRecord<K, V>, R>> tuples = runUserFunction(usersFunction, callback, batch);
-            for (final WorkContainer<K, V> workContainer : batch) {
-                getActionListeners().afterFunctionCall(workContainer.getCr());
-            }
-            return tuples;
+            return runUserFunction(usersFunction, callback, batch);
         });
         // for a batch, each message in the batch shares the same result
         for (final WorkContainer<K, V> workContainer : batch) {
@@ -1342,7 +1338,11 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
         try {
             if (!activeWorkContainers.isEmpty()) {
-                return runUserFunctionInternal(usersFunction, context, callback, activeWorkContainers);
+                final ArrayList<Tuple<ConsumerRecord<K, V>, R>> tuples = runUserFunctionInternal(usersFunction, context, callback, activeWorkContainers);
+                for (final WorkContainer<K, V> workContainer : workContainerBatch) {
+                    getActionListeners().afterFunctionCall(workContainer.getCr());
+                }
+                return tuples;
             }
             return Collections.emptyList();
         } catch (Exception e) {
