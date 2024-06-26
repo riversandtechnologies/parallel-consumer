@@ -5,6 +5,7 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ActionListener;
+import io.confluent.parallelconsumer.state.WorkContainer;
 import lombok.Getter;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -77,21 +78,21 @@ public class ActionListeners<K, V> {
         return true;
     }
 
-    public void beforeFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
+    public void beforeFunctionCall(final List<WorkContainer<K, V>> batch) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.beforeFunctionCall(consumerRecord);
+            actionListener.beforeFunctionCall(batch);
         }
     }
 
-    public void functionError(final ConsumerRecord<K, V> consumerRecord) {
+    public void functionError(final List<ConsumerRecord<K, V>> consumerRecords) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.functionError(consumerRecord);
+            actionListener.functionError(consumerRecords);
         }
     }
 
-    public void afterFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
+    public void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.afterFunctionCall(consumerRecord);
+            actionListener.afterFunctionCall(consumerRecords, properties);
         }
     }
 

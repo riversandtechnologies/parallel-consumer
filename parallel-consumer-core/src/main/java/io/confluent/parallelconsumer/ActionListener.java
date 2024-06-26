@@ -4,6 +4,7 @@ package io.confluent.parallelconsumer;
  * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
+import io.confluent.parallelconsumer.state.WorkContainer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
@@ -27,11 +28,11 @@ public interface ActionListener<K, V> {
 
     boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord);
 
-    void beforeFunctionCall(final ConsumerRecord<K, V> consumerRecord);
+    void beforeFunctionCall(final List<WorkContainer<K, V>> batch);
 
-    void functionError(final ConsumerRecord<K, V> consumerRecord);
+    void functionError(final List<ConsumerRecord<K, V>> consumerRecords);
 
-    void afterFunctionCall(final ConsumerRecord<K, V> consumerRecord);
+    void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties);
 
     void clear();
 }
