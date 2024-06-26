@@ -452,7 +452,7 @@ public class ParallelConsumerOptions<K, V> {
      * @see ParallelConsumerOptions#getBatchWindowTimeInMs()
      */
     @Builder.Default
-    private final Integer batchWindowTimeInMs = 1;
+    private final Long batchWindowTimeInMs = 1L;
 
     /**
      * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not

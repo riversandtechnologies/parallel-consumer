@@ -788,6 +788,14 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
             commitOffsetsThatAreReady();
         }
 
+        if (options.getBatchSize() > 1 && wm.getNumberOfWorkQueuedInShardsAwaitingSelection() < options.getBatchSize()) {
+            try {
+                Thread.sleep(options.getBatchWindowTimeInMs());
+            } catch (InterruptedException e) {
+                log.trace("Woke up", e);
+            }
+        }
+
         // distribute more work
         retrieveAndDistributeNewWork(userFunction, callback);
 
@@ -808,15 +816,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         // sanity - supervise the poller
         brokerPollSubsystem.supervise();
 
-        Duration duration;
-        if (options.getBatchSize() > 1 && wm.getNumberOfWorkQueuedInShardsAwaitingSelection() < options.getBatchSize()) {
-            duration = Duration.ofMillis(options.getBatchWindowTimeInMs());
-        } else {
-            // thread yield for spin lock avoidance
-            duration = Duration.ofMillis(1);
-        }
         try {
-            Thread.sleep(duration.toMillis());
+            Thread.sleep(1L);
         } catch (InterruptedException e) {
             log.trace("Woke up", e);
         }
@@ -918,19 +919,21 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
             // perf: could inline makeBatches
             var batches = makeBatches(workToProcess);
 
-            // debugging
-            if (log.isDebugEnabled()) {
-                var sizes = batches.stream().map(List::size).sorted().collect(Collectors.toList());
-                log.debug("Number batches: {}, smallest {}, sizes {}", batches.size(), sizes.stream().findFirst().get(), sizes);
-                List<Integer> integerStream = sizes.stream().filter(x -> x < (int) options.getBatchSize()).collect(Collectors.toList());
-                if (integerStream.size() > 1) {
-                    log.warn("More than one batch isn't target size: {}. Input number of batches: {}", integerStream, batches.size());
+            if (!batches.isEmpty()) {
+                // debugging
+                if (log.isDebugEnabled()) {
+                    var sizes = batches.stream().map(List::size).sorted().collect(Collectors.toList());
+                    log.debug("Number batches: {}, smallest {}, sizes {}", batches.size(), sizes.stream().findFirst().get(), sizes);
+                    List<Integer> integerStream = sizes.stream().filter(x -> x < (int) options.getBatchSize()).collect(Collectors.toList());
+                    if (integerStream.size() > 1) {
+                        log.warn("More than one batch isn't target size: {}. Input number of batches: {}", integerStream, batches.size());
+                    }
                 }
-            }
 
-            // submit
-            for (var batch : batches) {
-                submitWorkToPoolInner(usersFunction, callback, batch);
+                // submit
+                for (var batch : batches) {
+                    submitWorkToPoolInner(usersFunction, callback, batch);
+                }
             }
         }
     }
@@ -941,9 +944,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         // for each record, construct dispatch to the executor and capture a Future
         log.trace("Sending work ({}) to pool", batch);
 
-        for (final WorkContainer<K, V> workContainer : batch) {
-            getActionListeners().beforeFunctionCall(workContainer.getCr());
-        }
+        getActionListeners().beforeFunctionCall(batch);
 
         Future outputRecordFuture = workerThreadPool.get().submit(() -> {
             addInstanceMDC();
@@ -1338,11 +1339,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
         try {
             if (!activeWorkContainers.isEmpty()) {
-                final ArrayList<Tuple<ConsumerRecord<K, V>, R>> tuples = runUserFunctionInternal(usersFunction, context, callback, activeWorkContainers);
-                for (final WorkContainer<K, V> workContainer : workContainerBatch) {
-                    getActionListeners().afterFunctionCall(workContainer.getCr());
-                }
-                return tuples;
+                return runUserFunctionInternal(usersFunction, context, callback, activeWorkContainers);
             }
             return Collections.emptyList();
         } catch (Exception e) {
@@ -1359,7 +1356,6 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
             for (var wc : workContainerBatch) {
                 wc.onUserFunctionFailure(e);
                 addToMailbox(context, wc); // always add on error
-                getActionListeners().functionError(wc.getCr());
             }
             throw e; // trow again to make the future failed
         } finally {
