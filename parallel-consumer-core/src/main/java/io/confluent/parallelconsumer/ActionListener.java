@@ -28,7 +28,7 @@ public interface ActionListener<K, V> {
 
     boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord);
 
-    void beforeFunctionCall(final List<WorkContainer<K, V>> batch);
+    void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches);
 
     void functionError(final List<ConsumerRecord<K, V>> consumerRecords);
 

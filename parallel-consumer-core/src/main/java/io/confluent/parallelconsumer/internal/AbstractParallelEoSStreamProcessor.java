@@ -913,11 +913,13 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         if (state.equals(CLOSING) || state.equals(CLOSED)) {
             log.debug("Not submitting new work as Parallel Consumer is in {} state, incoming work: {}, Pool stats: {}", state, workToProcess.size(), workerThreadPool.get());
         }
+
+        List<List<WorkContainer<K, V>>> batches = null;
         if (!workToProcess.isEmpty()) {
             log.debug("New work incoming: {}, Pool stats: {}", workToProcess.size(), workerThreadPool.get());
 
             // perf: could inline makeBatches
-            var batches = makeBatches(workToProcess);
+            batches = makeBatches(workToProcess);
 
             if (!batches.isEmpty()) {
                 // debugging
@@ -929,12 +931,17 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
                         log.warn("More than one batch isn't target size: {}. Input number of batches: {}", integerStream, batches.size());
                     }
                 }
-
-                // submit
-                for (var batch : batches) {
-                    submitWorkToPoolInner(usersFunction, callback, batch);
-                }
             }
+        }
+
+        if (batches == null) {
+            batches = new ArrayList<>();
+        }
+
+        getActionListeners().beforeFunctionCall(batches);
+        // submit
+        for (var batch : batches) {
+            submitWorkToPoolInner(usersFunction, callback, batch);
         }
     }
 
@@ -944,15 +951,15 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         // for each record, construct dispatch to the executor and capture a Future
         log.trace("Sending work ({}) to pool", batch);
 
-        getActionListeners().beforeFunctionCall(batch);
-
-        Future outputRecordFuture = workerThreadPool.get().submit(() -> {
-            addInstanceMDC();
-            return runUserFunction(usersFunction, callback, batch);
-        });
-        // for a batch, each message in the batch shares the same result
-        for (final WorkContainer<K, V> workContainer : batch) {
-            workContainer.setFuture(outputRecordFuture);
+        if (!batch.isEmpty()) {
+            Future outputRecordFuture = workerThreadPool.get().submit(() -> {
+                addInstanceMDC();
+                return runUserFunction(usersFunction, callback, batch);
+            });
+            // for a batch, each message in the batch shares the same result
+            for (final WorkContainer<K, V> workContainer : batch) {
+                workContainer.setFuture(outputRecordFuture);
+            }
         }
     }
 

@@ -49,17 +49,20 @@ public class ActionListeners<K, V> {
     }
 
     public Set<TopicPartition> pausePartitions() {
-        Set<TopicPartition> pausedPartitions = new HashSet<>();
+        Set<TopicPartition> allPausedPartitions = new HashSet<>();
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            pausedPartitions.addAll(actionListener.pausePartitions());
+            Set<TopicPartition> pausedPartitions = actionListener.pausePartitions();
+            if (pausedPartitions != null && !pausedPartitions.isEmpty()) {
+                allPausedPartitions.addAll(pausedPartitions);
+            }
         }
-        if (pausedPartitions.isEmpty()) {
+        if (allPausedPartitions.isEmpty()) {
             isPausing = false;
         } else {
-            consumer.pause(pausedPartitions);
+            consumer.pause(allPausedPartitions);
             isPausing = true;
         }
-        return pausedPartitions;
+        return allPausedPartitions;
     }
 
     public ConsumerRecords<K, V> afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
@@ -78,9 +81,9 @@ public class ActionListeners<K, V> {
         return true;
     }
 
-    public void beforeFunctionCall(final List<WorkContainer<K, V>> batch) {
+    public void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.beforeFunctionCall(batch);
+            actionListener.beforeFunctionCall(batches);
         }
     }
 
