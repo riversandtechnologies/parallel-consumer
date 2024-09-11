@@ -1,12 +1,13 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import lombok.SneakyThrows;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -19,8 +20,8 @@ import java.nio.ByteBuffer;
  */
 // metrics: avg offsets mapped per bit, average encoded size, avg time to encode,
 @ToString
-@Slf4j
 public abstract class OffsetEncoder {
+    private static final Logger log = LogManager.getLogger(OffsetEncoder.class);
 
     /**
      * Implementation version of the encoding

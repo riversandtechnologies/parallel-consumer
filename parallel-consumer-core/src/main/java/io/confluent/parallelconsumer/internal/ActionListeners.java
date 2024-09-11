@@ -15,6 +15,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.*;
 
 public class ActionListeners<K, V> {
+    @Getter
     private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
     private final Consumer<K, V> consumer;
     @Getter
@@ -85,6 +86,15 @@ public class ActionListeners<K, V> {
         for (final ActionListener<K, V> actionListener : actionListeners) {
             actionListener.beforeFunctionCall(batches);
         }
+    }
+
+    public boolean isNoisy(final ConsumerRecord<K, V> consumerRecord) {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            if (actionListener.isNoisy(consumerRecord)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void functionError(final List<ConsumerRecord<K, V>> consumerRecords) {

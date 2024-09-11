@@ -5,10 +5,11 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import pl.tlinkowski.unij.api.UniMaps;
 
 import java.time.Duration;
@@ -20,8 +21,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 /**
  * Delegate for {@link KafkaConsumer}
  */
-@Slf4j
 public class ConsumerManager<K, V> {
+    private static final Logger log = LogManager.getLogger(ConsumerManager.class);
     private final Consumer<K, V> consumer;
     private final ParallelConsumerOptions<K, V> consumerOptions;
     private final ActionListeners<K, V> actionListeners;

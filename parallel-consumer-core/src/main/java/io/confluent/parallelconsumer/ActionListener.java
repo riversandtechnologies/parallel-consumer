@@ -30,6 +30,8 @@ public interface ActionListener<K, V> {
 
     void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches);
 
+    boolean isNoisy(ConsumerRecord<K, V> consumerRecord);
+
     void functionError(final List<ConsumerRecord<K, V>> consumerRecords);
 
     void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties);

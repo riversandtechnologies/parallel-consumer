@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
@@ -13,9 +13,10 @@ import io.micrometer.core.instrument.Gauge;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.slf4j.MDC;
 
 import javax.naming.InitialContext;
@@ -37,8 +38,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * @param <K>
  * @param <V>
  */
-@Slf4j
 public class BrokerPollSystem<K, V> implements OffsetCommitter {
+    private static final Logger log = LogManager.getLogger(BrokerPollSystem.class);
 
     private final ConsumerManager<K, V> consumerManager;
 

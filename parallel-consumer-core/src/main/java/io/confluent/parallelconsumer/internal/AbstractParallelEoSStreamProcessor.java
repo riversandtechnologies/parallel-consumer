@@ -16,13 +16,14 @@ import io.confluent.parallelconsumer.state.WorkManager;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import lombok.*;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.slf4j.MDC;
 
 import javax.naming.InitialContext;
@@ -55,8 +56,8 @@ import static lombok.AccessLevel.PROTECTED;
 /**
  * @see ParallelConsumer
  */
-@Slf4j
 public abstract class AbstractParallelEoSStreamProcessor<K, V> implements ParallelConsumer<K, V>, ConsumerRebalanceListener, Closeable {
+    private static final Logger log = LogManager.getLogger(AbstractParallelEoSStreamProcessor.class);
 
     public static final String MDC_INSTANCE_ID = "pcId";
 

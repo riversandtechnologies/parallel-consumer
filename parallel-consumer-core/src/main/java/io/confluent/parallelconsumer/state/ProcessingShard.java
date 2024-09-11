@@ -12,7 +12,10 @@ import io.confluent.parallelconsumer.internal.ActionListeners;
 import io.confluent.parallelconsumer.internal.RateLimiter;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.HashSet;
@@ -35,9 +38,9 @@ import static lombok.AccessLevel.PRIVATE;
  * @author Antony Stubbs
  * @see ShardManager
  */
-@Slf4j
 @RequiredArgsConstructor
 public class ProcessingShard<K, V> {
+    private static final Logger log = LogManager.getLogger(ProcessingShard.class);
 
     /**
      * Map of offset to WorkUnits.
@@ -49,7 +52,7 @@ public class ProcessingShard<K, V> {
      * mode).
      */
     @Getter
-    private final NavigableMap<Long, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
+    private final NavigableMap<String, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
 
     @Getter(PRIVATE)
     private final ShardKey key;
@@ -66,7 +69,7 @@ public class ProcessingShard<K, V> {
     }
 
     public void addWorkContainer(WorkContainer<K, V> wc) {
-        long key = wc.offset();
+        String key = getWcKey(wc);
         if (entries.containsKey(key)) {
             log.debug("Entry for {} already exists in shard queue, dropping record", wc);
         } else {
@@ -74,9 +77,17 @@ public class ProcessingShard<K, V> {
         }
     }
 
-    public void onSuccess(WorkContainer<?, ?> wc) {
+    private String getWcKey(WorkContainer<K, V> wc) {
+        return wc.getTopicPartition() + "-" + wc.offset();
+    }
+
+    private String getWcKey(ConsumerRecord<K, V> cr) {
+        return new TopicPartition(cr.topic(), cr.partition()) + "-" + cr.offset();
+    }
+
+    public void onSuccess(WorkContainer<K, V> wc) {
         // remove work from shard's queue
-        entries.remove(wc.offset());
+        entries.remove(getWcKey(wc));
     }
 
     public boolean isEmpty() {
@@ -100,8 +111,8 @@ public class ProcessingShard<K, V> {
                 .count();
     }
 
-    public WorkContainer<K, V> remove(long offset) {
-        return entries.remove(offset);
+    public WorkContainer<K, V> remove(ConsumerRecord<K, V> consumerRecord) {
+        return entries.remove(getWcKey(consumerRecord));
     }
 
 
