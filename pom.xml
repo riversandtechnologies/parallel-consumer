@@ -99,7 +99,6 @@
         <surefire.version>3.2.5</surefire.version>
 
         <!-- core -->
-        <slf4j.version>2.0.9</slf4j.version>
         <kafka.version>3.6.0</kafka.version>
         <version.unij>0.1.3</version.unij>
 
@@ -116,6 +115,8 @@
         <truth-generator-maven-plugin.version>0.1.1</truth-generator-maven-plugin.version>
         <logback.version>1.4.14</logback.version>
         <micrometer-core.version>1.12.2</micrometer-core.version>
+        <log4j.version>2.21.1</log4j.version>
+        <slf4j.version>1.7.36</slf4j.version>
     </properties>
 
     <profiles>
@@ -262,8 +263,32 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <!-- Use Log4J 2 API -->
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Use Log4J 2 Core/Backend -->
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Route SLF4J to Log4J 2 -->
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Route Log4J 1.x to SLF4J, which routes to Log4J 2 -->
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
         <dependency>
@@ -737,8 +762,8 @@
                                         <exclude>log4j:*:*:*:runtime</exclude>
                                         <exclude>log4j:*:*:*:compile</exclude>
                                         <exclude>log4j:*:*:*:test</exclude>
-                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:runtime</exclude>
-                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:compile</exclude>
+<!--                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:runtime</exclude>-->
+<!--                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:compile</exclude>-->
                                         <!-- Javafaker is abandoned and has CVEs and bugs -->
                                         <exclude>com.github.javafaker</exclude>
                                     </excludes>

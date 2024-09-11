@@ -17,9 +17,10 @@ import io.confluent.parallelconsumer.metrics.PCMetricsDef;
 import io.micrometer.core.instrument.Gauge;
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -43,8 +44,8 @@ import static java.util.Optional.of;
  * @author Antony Stubbs
  */
 // metrics: number of queues, average queue length
-@Slf4j
 public class ShardManager<K, V> {
+    private static final Logger log = LogManager.getLogger(ShardManager.class);
 
     private final PCModule<K, V> module;
 
@@ -169,7 +170,7 @@ public class ShardManager<K, V> {
         if (processingShards.containsKey(shardKey)) {
             // remove the work
             ProcessingShard<K, V> shard = processingShards.get(shardKey);
-            WorkContainer<K, V> removedWC = shard.remove(consumerRecord.offset());
+            WorkContainer<K, V> removedWC = shard.remove(consumerRecord);
 
             // remove if in retry queue
             this.retryQueue.remove(removedWC);
@@ -197,14 +198,15 @@ public class ShardManager<K, V> {
 
         // If using KEY ordering, where the shard key is a message key, garbage collect old shard keys (i.e. KEY ordering we may never see a message for this key again)
         // If not, no point to remove the shard, as it will be reused for the next message from the same partition
-        boolean keyOrdering = options.getOrdering().equals(KEY) || options.getOrdering().equals(KEY_EXCLUSIVE) || options.getOrdering().equals(KEY_BATCH_EXCLUSIVE);
+        boolean keyOrdering = options.getOrdering().equals(KEY) || options.getOrdering().equals(KEY_EXCLUSIVE) ||
+                options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || options.getOrdering().equals(KEY_GROUP_EXCLUSIVE);
         if (keyOrdering && shardOpt.isPresent() && shardOpt.get().isEmpty()) {
             log.trace("Removing empty shard (key: {})", key);
             this.processingShards.remove(key);
         }
     }
 
-    public void onSuccess(WorkContainer<?, ?> wc) {
+    public void onSuccess(WorkContainer<K, V> wc) {
         // remove from the retry queue if it's contained
         this.retryQueue.remove(wc);
 

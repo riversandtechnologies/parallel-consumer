@@ -5,6 +5,7 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ActionListener;
+import io.confluent.parallelconsumer.state.WorkContainer;
 import lombok.Getter;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -14,6 +15,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.*;
 
 public class ActionListeners<K, V> {
+    @Getter
     private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
     private final Consumer<K, V> consumer;
     @Getter
@@ -48,17 +50,20 @@ public class ActionListeners<K, V> {
     }
 
     public Set<TopicPartition> pausePartitions() {
-        Set<TopicPartition> pausedPartitions = new HashSet<>();
+        Set<TopicPartition> allPausedPartitions = new HashSet<>();
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            pausedPartitions.addAll(actionListener.pausePartitions());
+            Set<TopicPartition> pausedPartitions = actionListener.pausePartitions();
+            if (pausedPartitions != null && !pausedPartitions.isEmpty()) {
+                allPausedPartitions.addAll(pausedPartitions);
+            }
         }
-        if (pausedPartitions.isEmpty()) {
+        if (allPausedPartitions.isEmpty()) {
             isPausing = false;
         } else {
-            consumer.pause(pausedPartitions);
+            consumer.pause(allPausedPartitions);
             isPausing = true;
         }
-        return pausedPartitions;
+        return allPausedPartitions;
     }
 
     public ConsumerRecords<K, V> afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
@@ -77,21 +82,30 @@ public class ActionListeners<K, V> {
         return true;
     }
 
-    public void beforeFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
+    public void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.beforeFunctionCall(consumerRecord);
+            actionListener.beforeFunctionCall(batches);
         }
     }
 
-    public void functionError(final ConsumerRecord<K, V> consumerRecord) {
+    public boolean isNoisy(final ConsumerRecord<K, V> consumerRecord) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.functionError(consumerRecord);
+            if (actionListener.isNoisy(consumerRecord)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void functionError(final List<ConsumerRecord<K, V>> consumerRecords) {
+        for (final ActionListener<K, V> actionListener : actionListeners) {
+            actionListener.functionError(consumerRecords);
         }
     }
 
-    public void afterFunctionCall(final ConsumerRecord<K, V> consumerRecord) {
+    public void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties) {
         for (final ActionListener<K, V> actionListener : actionListeners) {
-            actionListener.afterFunctionCall(consumerRecord);
+            actionListener.afterFunctionCall(consumerRecords, properties);
         }
     }
 

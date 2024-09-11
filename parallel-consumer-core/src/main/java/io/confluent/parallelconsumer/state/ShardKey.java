@@ -32,6 +32,7 @@ public class ShardKey {
         return switch (ordering) {
             case KEY_BATCH_EXCLUSIVE -> ofKeyBatchExclusive(rec);
             case KEY_EXCLUSIVE -> ofKeyExclusive(rec);
+            case KEY_GROUP_EXCLUSIVE -> ofKeyGroupExclusive(rec);
             case KEY -> ofKey(rec);
             case PARTITION, UNORDERED -> ofTopicPartition(rec);
         };
@@ -43,6 +44,10 @@ public class ShardKey {
 
     public static KeyExclusiveOrderedKey ofKeyExclusive(ConsumerRecord<?, ?> rec) {
         return new KeyExclusiveOrderedKey(rec);
+    }
+
+    public static KeyGroupExclusiveOrderedKey ofKeyGroupExclusive(ConsumerRecord<?, ?> rec) {
+        return new KeyGroupExclusiveOrderedKey(rec);
     }
 
     public static KeyOrderedKey ofKey(ConsumerRecord<?, ?> rec) {
@@ -91,6 +96,41 @@ public class ShardKey {
         }
 
         public KeyExclusiveOrderedKey(final Object key) {
+            if (key instanceof KeyWithEquals) {
+                this.key = (KeyWithEquals) key;
+            } else {
+                this.key = new KeyWithEquals(key);
+            }
+        }
+    }
+
+    @Value
+    @RequiredArgsConstructor
+    @EqualsAndHashCode(callSuper = true)
+    public static class KeyGroupExclusiveOrderedKey extends ShardKey {
+
+        String topicGroup;
+        /**
+         * The key of the record being referenced. Nullable if record is produced with a null key.
+         */
+        KeyWithEquals key;
+
+        public KeyGroupExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
+            this(rec.topic(), rec.key());
+        }
+
+        public KeyGroupExclusiveOrderedKey(final String topic, final Object key) {
+            String topicGroup = null;
+            if (topic.contains("-")) {
+                String[] delimitedTopic = topic.split("-");
+                if (delimitedTopic.length >= 2) {
+                    topicGroup = delimitedTopic[delimitedTopic.length - 1];
+                }
+            }
+            if (topicGroup == null || topicGroup == "") {
+                topicGroup = "default";
+            }
+            this.topicGroup = topicGroup;
             if (key instanceof KeyWithEquals) {
                 this.key = (KeyWithEquals) key;
             } else {

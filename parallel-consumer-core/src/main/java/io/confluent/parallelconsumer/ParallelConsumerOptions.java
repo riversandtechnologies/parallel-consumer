@@ -133,7 +133,13 @@ public class ParallelConsumerOptions<K, V> {
          * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
          * conflicts
          */
-        KEY_BATCH_EXCLUSIVE
+        KEY_BATCH_EXCLUSIVE,
+
+        /**
+         * Process messages in key order across topic group. Concurrency is at most the number of unique keys in a
+         * topic, limited by the max concurrency or uncommitted settings.
+         */
+        KEY_GROUP_EXCLUSIVE
     }
 
     /**
@@ -452,7 +458,7 @@ public class ParallelConsumerOptions<K, V> {
      * @see ParallelConsumerOptions#getBatchWindowTimeInMs()
      */
     @Builder.Default
-    private final Integer batchWindowTimeInMs = 1;
+    private final Long batchWindowTimeInMs = 1L;
 
     /**
      * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not

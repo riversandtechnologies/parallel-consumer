@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
@@ -9,15 +9,16 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
 import io.confluent.parallelconsumer.internal.PCModule;
 import io.confluent.parallelconsumer.metrics.PCMetrics;
 import io.confluent.parallelconsumer.metrics.PCMetricsDef;
-import io.micrometer.core.instrument.Tag;
 import io.confluent.parallelconsumer.state.PartitionState;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
 import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -44,8 +45,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * @author Antony Stubbs
  */
 // metrics: avg time spend encoding, number of times each encoding used
-@Slf4j
 public class OffsetMapCodecManager<K, V> {
+    private static final Logger log = LogManager.getLogger(OffsetMapCodecManager.class);
 
     /**
      * Used to prevent tests running in parallel that depends on setting static state in this class. Manipulation of
@@ -114,7 +115,7 @@ public class OffsetMapCodecManager<K, V> {
     // todo remove consumer #233
     public OffsetMapCodecManager(PCModule<K, V> module) {
         this.module = module;
-        if (module != null){
+        if (module != null) {
             this.errorPolicy = module.options().getInvalidOffsetMetadataPolicy();
         }
         pcMetrics = module.pcMetrics();

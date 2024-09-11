@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.internal.BrokerPollSystem;
@@ -18,11 +18,12 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -41,9 +42,8 @@ import static lombok.AccessLevel.*;
  * @see PartitionStateManager
  */
 @ToString
-@Slf4j
 public class PartitionState<K, V> {
-
+    private static final Logger log = LogManager.getLogger(PartitionState.class);
     /**
      * Symbolic value for a parameter which is initialised as having an offset absent (instead of using Optional or
      * null)
