@@ -72,7 +72,7 @@ public class WorkContainer<K, V> implements Comparable<WorkContainer<K, V>> {
     @Getter
     private Optional<Throwable> lastFailureReason;
 
-    private boolean inFlight = false;
+    private volatile boolean inFlight = false;
 
     @Getter
     private Optional<Boolean> maybeUserFunctionSucceeded = Optional.empty();

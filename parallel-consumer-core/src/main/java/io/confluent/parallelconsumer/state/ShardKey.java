@@ -4,6 +4,7 @@ package io.confluent.parallelconsumer.state;
  * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
+import com.google.common.base.Strings;
 import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -11,7 +12,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Simple value class for processing {@link ShardKey}s to make the various key systems type safe and extendable.
@@ -23,6 +26,7 @@ import java.util.Objects;
 @ToString
 @EqualsAndHashCode
 public class ShardKey {
+    private static final Map<String, String> TOPIC_GROUP_MAP = new ConcurrentHashMap();
 
     public static ShardKey of(WorkContainer<?, ?> wc, ProcessingOrder ordering) {
         return of(wc.getCr(), ordering);
@@ -120,16 +124,21 @@ public class ShardKey {
         }
 
         public KeyGroupExclusiveOrderedKey(final String topic, final Object key) {
-            String topicGroup = null;
-            if (topic.contains("-")) {
-                String[] delimitedTopic = topic.split("-");
-                if (delimitedTopic.length >= 2) {
-                    topicGroup = delimitedTopic[delimitedTopic.length - 1];
+            String topicGroup = TOPIC_GROUP_MAP.get(topic);
+            if (Strings.isNullOrEmpty(topicGroup)) {
+                if (topic.contains("-")) {
+                    String[] delimitedTopic = topic.split("-");
+                    if (delimitedTopic.length >= 2) {
+                        topicGroup = delimitedTopic[delimitedTopic.length - 1];
+                        TOPIC_GROUP_MAP.put(topic, topicGroup);
+                    }
+                }
+
+                if (Strings.isNullOrEmpty(topicGroup)) {
+                    topicGroup = "default";
                 }
             }
-            if (topicGroup == null || topicGroup == "") {
-                topicGroup = "default";
-            }
+
             this.topicGroup = topicGroup;
             if (key instanceof KeyWithEquals) {
                 this.key = (KeyWithEquals) key;

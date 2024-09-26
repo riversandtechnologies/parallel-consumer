@@ -260,7 +260,9 @@ public class ShardManager<K, V> {
             //
             int remainingToGet = requestedMaxWorkToRetrieve - workFromAllShards.size();
             var work = shard.getWorkIfAvailable(remainingToGet, module.pc().getActionListeners());
-            workFromAllShards.putAll(work);
+            if (work != null && !work.isEmpty()) {
+                workFromAllShards.putAll(work);
+            }
 
             // next
             next = shardQueueIterator.next();

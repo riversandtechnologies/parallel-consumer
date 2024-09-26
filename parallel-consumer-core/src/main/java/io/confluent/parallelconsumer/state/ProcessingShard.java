@@ -60,7 +60,6 @@ public class ProcessingShard<K, V> {
     private final ParallelConsumerOptions<?, ?> options;
 
     private final PartitionStateManager<K, V> pm;
-
     private final RateLimiter slowWarningRateLimit = new RateLimiter(5);
 
     public boolean workIsWaitingToBeProcessed() {
@@ -142,7 +141,13 @@ public class ProcessingShard<K, V> {
             if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
                 if (pm.couldBeTakenAsWork(workContainer)) {
                     if (workContainer.isAvailableToTakeAsWork()) {
-                        if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
+                        if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize < 1 && getCountWorkInFlight() < 1)) {
+                            log.trace("Taking {} as work", workContainer);
+                            workContainer.onQueueingForExecution();
+                            workTaken.put(key, workContainer);
+                            keyBatchSize++;
+                        } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) &&
+                                (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
                             log.trace("Taking {} as work", workContainer);
                             workContainer.onQueueingForExecution();
                             workTaken.put(key, workContainer);
@@ -226,7 +231,7 @@ public class ProcessingShard<K, V> {
     }
 
     private boolean isOrderRestricted() {
-        return options.getOrdering() != UNORDERED && options.getOrdering() != KEY_BATCH_EXCLUSIVE;
+        return !(options.getOrdering().equals(UNORDERED) || options.getOrdering().equals(KEY_BATCH_EXCLUSIVE));
     }
 
     // check if the work container is stale
