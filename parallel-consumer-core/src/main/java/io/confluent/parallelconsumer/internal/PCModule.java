@@ -67,7 +67,7 @@ public class PCModule<K, V> {
 
     protected ConsumerManager<K, V> consumerManager() {
         if (consumerManager == null) {
-            consumerManager = new ConsumerManager<>(optionsInstance.getConsumer(),
+            consumerManager = new ConsumerManager<>(pc(),
                     optionsInstance.getOffsetCommitTimeout(),
                     optionsInstance.getSaslAuthenticationRetryTimeout(),
                     optionsInstance.getSaslAuthenticationExceptionRetryBackoff());
@@ -85,7 +85,7 @@ public class PCModule<K, V> {
         return workManager;
     }
 
-    protected AbstractParallelEoSStreamProcessor<K, V> pc() {
+    public AbstractParallelEoSStreamProcessor<K, V> pc() {
         if (parallelEoSStreamProcessor == null) {
             parallelEoSStreamProcessor = new ParallelEoSStreamProcessor<>(options(), this);
         }

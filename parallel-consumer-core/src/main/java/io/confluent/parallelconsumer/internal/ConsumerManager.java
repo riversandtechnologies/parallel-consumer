@@ -5,42 +5,38 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import pl.tlinkowski.unij.api.UniMaps;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * Delegate for {@link KafkaConsumer}
  */
-@Slf4j
-@RequiredArgsConstructor
 public class ConsumerManager<K, V> {
-
+    private static final Logger log = LogManager.getLogger(ConsumerManager.class);
     private final Consumer<K, V> consumer;
-
+    private final ParallelConsumerOptions<K, V> consumerOptions;
+    private final ActionListeners<K, V> actionListeners;
     private final Duration offsetCommitTimeout;
-
     private final Duration saslAuthenticationRetryTimeout;
-
     private final Duration saslAuthenticationRetryBackOff;
-
     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
+    private SystemTimer systemTimer;
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
-
     private final AtomicLong pendingRequests = new AtomicLong(0L);
     /**
      * Since Kakfa 2.7, multi-threaded access to consumer group metadata was blocked, so before and after polling, save
@@ -57,6 +53,16 @@ public class ConsumerManager<K, V> {
     private int noWakeups = 0;
     private boolean commitRequested;
 
+    public ConsumerManager(AbstractParallelEoSStreamProcessor<K, V> apc, Duration offsetCommitTimeout, Duration saslAuthenticationRetryTimeout, Duration saslAuthenticationRetryBackOff) {
+        this.consumerOptions = apc.getOptions();
+        this.consumer = apc.getOptions().getConsumer();
+        this.actionListeners = apc.getActionListeners();
+        systemTimer = new SystemTimer(0, 300000, MILLISECONDS);
+        this.offsetCommitTimeout = offsetCommitTimeout;
+        this.saslAuthenticationRetryTimeout = saslAuthenticationRetryTimeout;
+        this.saslAuthenticationRetryBackOff = saslAuthenticationRetryBackOff;
+    }
+
     ConsumerRecords<K, V> poll(Duration requestedLongPollTimeout) {
         Duration timeoutToUse = requestedLongPollTimeout;
         ConsumerRecords<K, V> records = null;
@@ -66,6 +72,36 @@ public class ConsumerManager<K, V> {
                 timeoutToUse = Duration.ofMillis(1);// disable long poll, as commit needs performing
                 commitRequested = false;
             }
+            records = pollWithActionListener(timeoutToUse);
+        } catch (WakeupException w) {
+            correctPollWakeups++;
+            log.debug("Awoken from broker poll");
+            log.trace("Wakeup caller is:", w);
+            records = new ConsumerRecords<>(UniMaps.of());
+        } catch (IllegalStateException ex) {
+            log.error("Failed to poll from broker", ex);
+            records = new ConsumerRecords<>(UniMaps.of());
+        } finally {
+            pollingBroker.set(false);
+        }
+
+        if (consumerOptions.getWaitPollingStrategy() != null) {
+            consumerOptions.getWaitPollingStrategy().execute(records.count());
+        }
+
+        return records != null ? records : new ConsumerRecords<>(UniMaps.of());
+    }
+
+    private ConsumerRecords<K, V> pollWithActionListener(final Duration timeoutToUse) {
+        ConsumerRecords<K, V> partitionRecords = null;
+        ConsumerRecords<K, V> consumerRecords = null;
+        if (actionListeners.isAssignmentChanged()) {
+            actionListeners.clear();
+        }
+        actionListeners.refresh();
+        if (actionListeners.shouldProcess()) {
+            Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
+
             pollingBroker.set(true);
             updateCache();
             log.debug("Poll starting with timeout: {}", timeoutToUse);
@@ -77,7 +113,13 @@ public class ConsumerManager<K, V> {
                 while (!shutdownRequested.get()) {
                     tryCount++;
                     try {
-                        records = consumer.poll(timeoutToUse);
+                        partitionRecords = consumer.poll(timeoutToUse);
+                        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
+                        for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
+                            records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
+                        }
+                        consumerRecords = actionListeners.afterPoll(records);
+                        consumer.resume(pausedPartitions);
                         polledSuccessfully = true;
                         break;
                     } catch (SaslAuthenticationException authenticationException) {
@@ -100,22 +142,16 @@ public class ConsumerManager<K, V> {
                 }
             } finally {
                 if (polledSuccessfully) {
-                    log.debug("Poll completed normally (after timeout of {} on try {}) and returned {}...", timeoutToUse, tryCount, records.count());
+                    log.debug("Poll completed normally (after timeout of {} on try {}) and returned {}...", timeoutToUse, tryCount, partitionRecords.count());
                 } else {
                     log.debug("Poll did not completed (after timeout of {} and tries {}), shutdownRequested {}", timeoutToUse, tryCount, shutdownRequested.get());
                 }
                 pendingRequests.addAndGet(-1L);
             }
             updateCache();
-        } catch (WakeupException w) {
-            correctPollWakeups++;
-            log.debug("Awoken from broker poll");
-            log.trace("Wakeup caller is:", w);
-            records = new ConsumerRecords<>(UniMaps.of());
-        } finally {
-            pollingBroker.set(false);
+            return consumerRecords;
         }
-        return records != null ? records : new ConsumerRecords<>(UniMaps.of());
+        return new ConsumerRecords<>(UniMaps.of());
     }
 
     protected void updateCache() {
@@ -131,7 +167,7 @@ public class ConsumerManager<K, V> {
     public void wakeup() {
         // boolean reduces the chances of a mis-timed call to wakeup, but doesn't prevent all spurious wake up calls to other methods like #commit
         // if the call to wakeup happens /after/ the check for a wake up state inside #poll, then the next call will through the wake up exception (i.e. #commit)
-        if (pollingBroker.get()) {
+        if (pollingBroker.get() && systemTimer.isExpiredResetOnTrue()) {
             log.debug("Waking up consumer");
             consumer.wakeup();
         }
@@ -153,18 +189,18 @@ public class ConsumerManager<K, V> {
                         consumer.commitSync(offsetsToSend);
                         // break when offset commit is okay. Do not throw exception to main threads
                         break;
-                    } catch(CommitFailedException commitFailedException) {
+                    } catch (CommitFailedException commitFailedException) {
                         // it is impossible to commit now because the group have rebalanced
                         // Log an error and let the poller do the rebalance job and seek commit later
                         log.warn("Failed to commit offset due to group rebalancing. Will ignore the error for now.", commitFailedException);
                         break;
-                    } catch(TimeoutException timeoutException) {
+                    } catch (TimeoutException timeoutException) {
                         // offset commit times out after 1 minute.
                         // We should honor the user configured timeout offsetCommitTimeout here.
                         Instant now = Instant.now();
                         Duration elapsed = Duration.between(startedTime, now);
                         boolean shouldRetry = elapsed.toMillis() <= offsetCommitTimeout.toMillis();
-                        if(shouldRetry) {
+                        if (shouldRetry) {
                             log.warn("Encountered timeout while committing offset. Retrying ({})", tryCount);
                             // The timeout is already after 1 minute. There is no need to sleep in between retries
                         } else {
@@ -172,18 +208,18 @@ public class ConsumerManager<K, V> {
                             log.error("Offset commit took too long due to TimeoutException (tried {} times)", tryCount);
                             throw timeoutException;
                         }
-                    } catch(SaslAuthenticationException authenticationException) {
+                    } catch (SaslAuthenticationException authenticationException) {
                         // We should honor the user configured SaslAuthenticationException timeout here.
                         // to allow the program to sustain temporary LDAP failures
                         Instant now = Instant.now();
                         Duration elapsed = Duration.between(startedTime, now);
                         boolean shouldRetry = elapsed.toMillis() <= saslAuthenticationRetryTimeout.toMillis();
-                        if(shouldRetry) {
+                        if (shouldRetry) {
                             log.warn("Encountered SaslAuthenticationException while committing offset. Retrying ({})", tryCount);
                             // Since authentication exception may happen immediately, it is good to sleep a few seconds before trying again
                             try {
                                 retryBackOff(saslAuthenticationRetryBackOff.toMillis()); // no need to check return value
-                            } catch(InterruptedException ex) {
+                            } catch (InterruptedException ex) {
                                 // don't swallow the interrupted exception
                                 log.warn("Offset Commit was interrupted", ex);
                                 throw new RuntimeException("Offset Commit was interrupted");
@@ -212,14 +248,15 @@ public class ConsumerManager<K, V> {
         int interval = 100; // sleep in 100ms interval
         long started = System.currentTimeMillis();
         long deadLine = started + backOffTimeMs;
-        while(System.currentTimeMillis() < deadLine) {
+        while (System.currentTimeMillis() < deadLine) {
             Thread.sleep(interval);
-            if(shutdownRequested.get()) {
+            if (shutdownRequested.get()) {
                 return false;
             }
         }
         return true;
     }
+
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         // we dont' want to be woken up during a commit, only polls
         boolean inProgress = true;
@@ -240,7 +277,7 @@ public class ConsumerManager<K, V> {
     }
 
     public void signalStop() {
-        if(!this.shutdownRequested.get()) {
+        if (!this.shutdownRequested.get()) {
             log.info("Signaling Consumer Manager to stop");
             this.shutdownRequested.set(true);
         }
@@ -251,10 +288,10 @@ public class ConsumerManager<K, V> {
         log.debug("Consumer Manager Closing...");
         this.shutdownRequested.set(true);
         log.debug("ConsumerManager close waiting for max of {} for pending requests to complete", defaultTimeout);
-        while(pendingRequests.get() > 0L && System.currentTimeMillis() < deadline) {
+        while (pendingRequests.get() > 0L && System.currentTimeMillis() < deadline) {
             try {
                 Thread.sleep(100);
-            } catch(InterruptedException ex) {
+            } catch (InterruptedException ex) {
                 throw new RuntimeException("Wait interrupted");
             }
         }

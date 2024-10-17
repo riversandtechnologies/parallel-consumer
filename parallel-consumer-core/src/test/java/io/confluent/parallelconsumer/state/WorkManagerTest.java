@@ -131,7 +131,6 @@ public class WorkManagerTest {
         return stringStringConsumerRecord;
     }
 
-
     @ParameterizedTest
     @EnumSource
     void basic(ParallelConsumerOptions.ProcessingOrder order) {

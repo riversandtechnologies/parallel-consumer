@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.TimeUtils;
@@ -10,9 +10,10 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
 import io.confluent.parallelconsumer.internal.PCModule;
 import io.confluent.parallelconsumer.internal.ProducerManager;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import pl.tlinkowski.unij.api.UniLists;
 
 import java.util.ArrayList;
@@ -28,9 +29,9 @@ import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.P
 import static io.confluent.parallelconsumer.internal.UserFunctions.carefullyRun;
 import static java.util.Optional.of;
 
-@Slf4j
 public class ParallelEoSStreamProcessor<K, V> extends AbstractParallelEoSStreamProcessor<K, V>
         implements ParallelStreamProcessor<K, V> {
+    private static final Logger log = LogManager.getLogger(ParallelEoSStreamProcessor.class);
 
     /**
      * Construct the AsyncConsumer by wrapping this passed in consumer and producer, which can be configured any which

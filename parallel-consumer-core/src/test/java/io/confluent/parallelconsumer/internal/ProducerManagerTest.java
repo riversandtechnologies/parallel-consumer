@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import com.google.common.truth.Truth;
@@ -27,7 +27,6 @@ import org.mockito.Mockito;
 import pl.tlinkowski.unij.api.UniLists;
 import pl.tlinkowski.unij.api.UniMaps;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
@@ -41,7 +40,6 @@ import static io.confluent.parallelconsumer.ManagedTruth.assertWithMessage;
 import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.PERIODIC_TRANSACTIONAL_PRODUCER;
 import static io.confluent.parallelconsumer.internal.ProducerWrapper.ProducerState.*;
 import static java.time.Duration.ofSeconds;
-import static java.util.Collections.emptyList;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -92,7 +90,7 @@ class ProducerManagerTest {
     private PCModuleTestEnv buildModule(ParallelConsumerOptions<String, String> opts) {
         return new PCModuleTestEnv(opts) {
             @Override
-            protected AbstractParallelEoSStreamProcessor<String, String> pc() {
+            public AbstractParallelEoSStreamProcessor<String, String> pc() {
                 if (parallelEoSStreamProcessor == null) {
                     AbstractParallelEoSStreamProcessor<String, String> raw = super.pc();
                     parallelEoSStreamProcessor = spy(raw);
