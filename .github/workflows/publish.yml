@@ -1,0 +1,40 @@
+# This workflow will build a Java project with Maven
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Publish parallel-consumer-parent
+
+on:
+  push:
+    tags:
+      - "0*-rs"
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
+
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout parallel-consumer-parent
+        uses: actions/checkout@v4
+      - name: Get tag
+        run: |
+          echo VERSION=${GITHUB_REF_NAME:1} >> $GITHUB_ENV && echo $VERSION
+      - name: Set up Eclipse Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: 'maven'
+      - name: Create Package
+        run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml -pl .,parallel-consumer-core
+      - name: Publish Package
+        env:
+          EDS_BUILD_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
+          REGISTRY_URL: "https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1"
+        run: |
+          mvn -B deploy:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.3.1-rs.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml

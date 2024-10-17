@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Function;
 
 import static io.confluent.csid.utils.StringUtils.msg;
@@ -75,6 +76,8 @@ public class ParallelConsumerOptions<K, V> {
     @Builder.Default
     private final String managedThreadFactory = "java:comp/DefaultManagedThreadFactory";
 
+    private final ThreadFactory threadFactory;
+
     /**
      * Micrometer MeterRegistry
      * <p>
@@ -117,7 +120,26 @@ public class ParallelConsumerOptions<K, V> {
          * Process messages in key order. Concurrency is at most the number of unique keys in a topic, limited by the
          * max concurrency or uncommitted settings.
          */
-        KEY
+        KEY,
+
+        /**
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
+         * limited by the max concurrency or uncommitted settings.
+         */
+        KEY_EXCLUSIVE,
+
+        /**
+         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
+         * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
+         * conflicts
+         */
+        KEY_BATCH_EXCLUSIVE,
+
+        /**
+         * Process messages in key order across topic group. Concurrency is at most the number of unique keys in a
+         * topic, limited by the max concurrency or uncommitted settings.
+         */
+        KEY_GROUP_EXCLUSIVE
     }
 
     /**
@@ -442,6 +464,34 @@ public class ParallelConsumerOptions<K, V> {
      */
     @Builder.Default
     private final Integer batchSize = 1;
+
+    /**
+     * We can limit max bytes present in one batch. In case if batch size is set and max bytes is not set, then default
+     * max bytes is 1MB. If {@link ParallelConsumerOptions#getOrdering()} is KEY_BATCH_EXCLUSIVE then max bytes config
+     * is not consider to divide into batches
+     *
+     * @see ParallelConsumerOptions#getBatchBytes()
+     */
+    @Builder.Default
+    private final Long batchBytes = 1000000L;
+
+    /**
+     * We can create batches after certain time. In case if batch size is not getting full, we can delay creating
+     * batches and try to accumulate as many requests as possible. In effect only if batch size is higher than 1.
+     *
+     * @see ParallelConsumerOptions#getBatchWindowTimeInMs()
+     */
+    @Builder.Default
+    private final Long batchWindowTimeInMs = 1L;
+
+    /**
+     * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not
+     * wait at all if not configured.
+     *
+     * @see ParallelConsumerOptions#getWaitPollingStrategy()
+     */
+    @Builder.Default
+    private WaitPollingStrategy waitPollingStrategy = null;
 
     /**
      * Configure the amount of delay a record experiences, before a warning is logged.

@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.Range;
@@ -10,7 +10,8 @@ import io.confluent.parallelconsumer.state.PartitionState;
 import io.confluent.parallelconsumer.state.WorkManager;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -30,9 +31,9 @@ import static io.confluent.parallelconsumer.state.PartitionState.KAFKA_OFFSET_AB
  * @author Antony Stubbs
  * @see #invoke()
  */
-@Slf4j
 @ToString(onlyExplicitlyIncluded = true)
 public class OffsetSimultaneousEncoder {
+    private static final Logger log = LogManager.getLogger(OffsetSimultaneousEncoder.class);
 
     /**
      * Size threshold in bytes after which compressing the encodings will be compared, as it seems to be typically worth

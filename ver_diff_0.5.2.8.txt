@@ -1,0 +1,3047 @@
+diff --git a/.github/workflows/cleanup.yml b/.github/workflows/cleanup.yml
+new file mode 100644
+index 00000000..6817ac73
+--- /dev/null
++++ b/.github/workflows/cleanup.yml
+@@ -0,0 +1,23 @@
++name: Cleanup SDK
++
++on:
++  push:
++    tags:
++      - "rm-0*-rs"
++
++jobs:
++  build:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout parallel-consumer-parent
++        uses: actions/checkout@v4
++      - name: Get tag
++        run: |
++          echo VERSION=${GITHUB_REF_NAME:3} >> $GITHUB_ENV && echo $VERSION
++      - name: Cleanup Parallel consumer lib
++        uses: actions/delete-package-versions@v5
++        with:
++          package-version-ids: "${{ env.VERSION }}"
++          package-name: 'parallel-consumer-core'
++          package-type: 'jar'
++          token: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
+diff --git a/.github/workflows/maven.yml b/.github/workflows/maven.yml
+deleted file mode 100644
+index 0a4cde6a..00000000
+--- a/.github/workflows/maven.yml
++++ /dev/null
+@@ -1,113 +0,0 @@
+-# This workflow will build a Java project with Maven
+-# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+-
+-# Tests disabled due to flakiness with under resourced github test machines. Confluent Jira works fine. Will fix later.
+-name: Unit tests only
+-
+-on:
+-  push:
+-    branches: [ master ]
+-  pull_request:
+-    branches: [ master ]
+-
+-jobs:
+-  build:
+-    strategy:
+-      fail-fast: false
+-      matrix:
+-        # Why not? because we can.
+-        # 2.0.1, 2.1.1, 2.2.2, 2.3.1, 2.4.1 don't work - needs zstd and some kafka client libs.
+-        # Doesn't mean it couldn't be modified slightly to work...
+-        #ak: [ 2.5.1, 2.6.1, 2.7.0, 2.8.1, 3.0.1, 3.1.0 ]
+-        # 25 and 26 include a dep with a vulnerability which ossindex fails the build for
+-        ak: [ 2.7.0, 2.8.1, 3.0.1, 3.1.0 ]
+-        #ak: [ 2.7.0 ]
+-        #jdk: [ '-P jvm8-release -Djvm8.location=/opt/hostedtoolcache/Java_Zulu_jdk/8.0.332-9/x64', '' ]
+-        # TG currently targets 11, so can't run the tests on 8 https://github.com/astubbs/truth-generator/issues/114
+-        jdk: [ '' ]
+-        experimental: [ false ]
+-        name: [ "Stable AK version" ]
+-        include:
+-          # AK 2.4 not supported
+-          #           - ak: "'[2.4.1,2.5)'" # currently failing
+-          #             experimental: true
+-          #             name: "Oldest AK breaking version 2.4.1+ (below 2.5.0) expected to fail"
+-          - ak: "'[2.7.0,4)'" # currently failing
+-            experimental: true
+-            name: "Newest AK version 2.7.0+?"
+-
+-    continue-on-error: ${{ matrix.experimental }}
+-    name: "AK: ${{ matrix.ak }} JDK: ${{ matrix.jdk }}"
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v3
+-
+-      - name: Setup JDK 1.8
+-        uses: actions/setup-java@v3
+-        with:
+-          java-version: '8'
+-          distribution: 'zulu'
+-          cache: 'maven'
+-
+-      # the patch version will be upgraded silently causing the build to eventually start failing - need to store this as a var - possible?
+-      - name: Show java 1.8 home
+-        # /opt/hostedtoolcache/Java_Zulu_jdk/8.0.332-9/x64/bin/java
+-        run: which java
+-
+-      #     - name: Setup JDK 1.9
+-      #       uses: actions/setup-java@v1
+-      #       with:
+-      #         java-version: 1.9
+-
+-      #    - name: Show java 1.9 home
+-      # /opt/hostedtoolcache/jdk/9.0.7/x64
+-      #      run: which java
+-
+-      - name: Setup JDK 17
+-        uses: actions/setup-java@v3
+-        with:
+-          distribution: 'zulu'
+-          java-version: '17'
+-          cache: 'maven'
+-
+-      - name: Show java 17 home
+-        # /opt/hostedtoolcache/jdk/13.0.2/x64/bin/java
+-        run: which java
+-
+-      #    - name: Show java version
+-      #      run: java -version
+-
+-      #     - name: Show mvn version
+-      #       run: mvn -version
+-
+-      #    - name: Build with Maven on Java 13
+-      #      run: mvn -B package --file pom.xml
+-
+-
+-      # done automatically now
+-      #      - name: Cache Maven packages
+-      #        uses: actions/cache@v2.1.7
+-      #        with:
+-      #          path: ~/.m2/repository
+-      #          key: ${{ runner.os }}-m2
+-      #          restore-keys: ${{ runner.os }}-m2
+-
+-      - name: Test with Maven
+-        run: mvn -Pci -B package ${{ matrix.jdk }} -Dkafka.version=${{ matrix.ak }} -Dlicense.skip
+-
+-#     - name: Archive test results
+-#       if: ${{ always() }}
+-#       uses: actions/upload-artifact@v2
+-#       with:
+-#         name: test-reports
+-#         path: target/**-reports/*
+-#         retention-days: 14
+-#
+-#     - name: Archive surefire test results
+-#       if: ${{ always() }}
+-#       uses: actions/upload-artifact@v2
+-#       with:
+-#         name: test-reports
+-#         path: target/surefire-reports/*
+-#         retention-days: 14
+diff --git a/.github/workflows/publish.yml b/.github/workflows/publish.yml
+new file mode 100644
+index 00000000..cf9ff3b1
+--- /dev/null
++++ b/.github/workflows/publish.yml
+@@ -0,0 +1,40 @@
++# This workflow will build a Java project with Maven
++# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
++
++name: Publish parallel-consumer-parent
++
++on:
++  push:
++    tags:
++      - "0*-rs"
++  pull_request:
++    branches:
++      - master
++    types:
++      - closed
++
++
++jobs:
++  build:
++    if: github.event.pull_request.merged == true
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout parallel-consumer-parent
++        uses: actions/checkout@v4
++      - name: Get tag
++        run: |
++          echo VERSION=${GITHUB_REF_NAME:1} >> $GITHUB_ENV && echo $VERSION
++      - name: Set up Eclipse Temurin JDK 21
++        uses: actions/setup-java@v4
++        with:
++          distribution: 'temurin'
++          java-version: 21
++          cache: 'maven'
++      - name: Create Package
++        run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml -pl .,parallel-consumer-core
++      - name: Publish Package
++        env:
++          EDS_BUILD_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
++          REGISTRY_URL: "https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1"
++        run: |
++          mvn -B deploy:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.2.8-rs.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+diff --git a/.gitignore b/.gitignore
+index 48a79e79..d4d4e9f2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -66,6 +66,7 @@ delombok/
+ 
+ # Maven
+ target
++target-java21
+ release.properties
+ /.idea/encodings.xml
+ /.idea/misc.xml
+diff --git a/.travis-archived.yml b/.travis-archived.yml
+index eb04f839..1facd817 100644
+--- a/.travis-archived.yml
++++ b/.travis-archived.yml
+@@ -6,7 +6,7 @@
+ 
+ language: java
+ jdk:
+-  - openjdk13
++  - openjdk21
+ 
+ sudo: required
+ 
+@@ -53,8 +53,6 @@ addons:
+ script:
+   # the following command line builds the project, runs the tests with coverage and then execute the SonarCloud analysis
+   # - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install sonar:sonar versions:display-dependency-updates
+-  # -Djvm8.location=/usr/lib/jvm/java-8-openjdk-amd64/jre
+-  # -Djvm9.location=/home/travis/openjdk9
+-  - ~/bin/install-jdk.sh --target /home/travis/openjdk9 --feature 9
++  - ~/bin/install-jdk.sh --target /home/travis/openjdk21 --feature 21
+   - mvn -version
+-  - mvn -Pci clean verify versions:display-plugin-updates versions:display-property-updates versions:display-dependency-updates --fail-at-end -P jvm9-release -Djvm9.location=/home/travis/openjdk9
+\ No newline at end of file
++  - mvn -Pci clean verify versions:display-plugin-updates versions:display-property-updates versions:display-dependency-updates --fail-at-end -P jvm21-release -Djvm21.location=/home/travis/openjdk21
+\ No newline at end of file
+diff --git a/parallel-consumer-core/pom.xml b/parallel-consumer-core/pom.xml
+index 2e12b08d..1e761e7d 100644
+--- a/parallel-consumer-core/pom.xml
++++ b/parallel-consumer-core/pom.xml
+@@ -8,7 +8,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-parent</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <modelVersion>4.0.0</modelVersion>
+@@ -116,6 +116,10 @@
+             <version>8.0.1.RELEASE</version>
+             <scope>test</scope>
+         </dependency>
++        <dependency>
++            <groupId>com.google.guava</groupId>
++            <artifactId>guava</artifactId>
++        </dependency>
+     </dependencies>
+ 
+     <build>
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/csid/utils/LoopingResumingIterator.java b/parallel-consumer-core/src/main/java/io/confluent/csid/utils/LoopingResumingIterator.java
+index 5258d70c..9e7dd735 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/csid/utils/LoopingResumingIterator.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/csid/utils/LoopingResumingIterator.java
+@@ -1,11 +1,12 @@
+ package io.confluent.csid.utils;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import lombok.Getter;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.Iterator;
+ import java.util.Map;
+@@ -24,8 +25,9 @@ import java.util.Optional;
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
++
+ public class LoopingResumingIterator<KEY, VALUE> {
++    private static final Logger log = LogManager.getLogger(LoopingResumingIterator.class);
+ 
+     private Optional<Map.Entry<KEY, VALUE>> head = Optional.empty();
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/csid/utils/TimeUtils.java b/parallel-consumer-core/src/main/java/io/confluent/csid/utils/TimeUtils.java
+index e9b3bd16..ddb2431e 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/csid/utils/TimeUtils.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/csid/utils/TimeUtils.java
+@@ -1,22 +1,24 @@
+ package io.confluent.csid.utils;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import lombok.Builder;
+ import lombok.SneakyThrows;
+ import lombok.Value;
+ import lombok.experimental.UtilityClass;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Clock;
+ import java.time.Duration;
+ import java.util.concurrent.Callable;
+ 
+-@Slf4j
++
+ @UtilityClass
+ public class TimeUtils {
++    private static final Logger log = LogManager.getLogger(TimeUtils.class);
+ 
+     public Clock getClock() {
+         return Clock.systemUTC();
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ActionListener.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ActionListener.java
+new file mode 100644
+index 00000000..b44f6664
+--- /dev/null
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ActionListener.java
+@@ -0,0 +1,40 @@
++package io.confluent.parallelconsumer;
++
++/*-
++ * Copyright (C) 2020-2024 Confluent, Inc.
++ */
++
++import io.confluent.parallelconsumer.state.WorkContainer;
++import org.apache.kafka.clients.consumer.ConsumerRecord;
++import org.apache.kafka.common.TopicPartition;
++
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++public interface ActionListener<K, V> {
++
++    boolean isEnabled();
++
++    boolean isAssignmentChanged();
++
++    void refresh();
++
++    boolean shouldProcess();
++
++    Set<TopicPartition> pausePartitions();
++
++    void afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records);
++
++    boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord);
++
++    void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches);
++
++    boolean isNoisy(ConsumerRecord<K, V> consumerRecord);
++
++    void functionError(final List<ConsumerRecord<K, V>> consumerRecords);
++
++    void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties);
++
++    void clear();
++}
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/JStreamParallelEoSStreamProcessor.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/JStreamParallelEoSStreamProcessor.java
+index fa8d9084..af210d72 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/JStreamParallelEoSStreamProcessor.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/JStreamParallelEoSStreamProcessor.java
+@@ -1,20 +1,21 @@
+ package io.confluent.parallelconsumer;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.csid.utils.Java8StreamUtils;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.producer.ProducerRecord;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.List;
+ import java.util.concurrent.ConcurrentLinkedDeque;
+ import java.util.function.Function;
+ import java.util.stream.Stream;
+ 
+-@Slf4j
+ public class JStreamParallelEoSStreamProcessor<K, V> extends ParallelEoSStreamProcessor<K, V> implements JStreamParallelStreamProcessor<K, V> {
++    private static final Logger log = LogManager.getLogger(JStreamParallelEoSStreamProcessor.class);
+ 
+     private final Stream<ConsumeProduceResult<K, V, K, V>> stream;
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumer.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumer.java
+index de95f1f9..c4a28dae 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumer.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumer.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.internal.AbstractParallelEoSStreamProcessor;
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumerOptions.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumerOptions.java
+index 1589d0ce..ad87a583 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumerOptions.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelConsumerOptions.java
+@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
+ 
+ import java.time.Duration;
+ import java.util.Objects;
++import java.util.concurrent.ThreadFactory;
+ import java.util.function.Function;
+ 
+ import static io.confluent.csid.utils.StringUtils.msg;
+@@ -75,6 +76,8 @@ public class ParallelConsumerOptions<K, V> {
+     @Builder.Default
+     private final String managedThreadFactory = "java:comp/DefaultManagedThreadFactory";
+ 
++    private final ThreadFactory threadFactory;
++
+     /**
+      * Micrometer MeterRegistry
+      * <p>
+@@ -117,7 +120,26 @@ public class ParallelConsumerOptions<K, V> {
+          * Process messages in key order. Concurrency is at most the number of unique keys in a topic, limited by the
+          * max concurrency or uncommitted settings.
+          */
+-        KEY
++        KEY,
++
++        /**
++         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
++         * limited by the max concurrency or uncommitted settings.
++         */
++        KEY_EXCLUSIVE,
++
++        /**
++         * Process messages in key order across partitions. Concurrency is at most the number of unique keys in a topic,
++         * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
++         * conflicts
++         */
++        KEY_BATCH_EXCLUSIVE,
++
++        /**
++         * Process messages in key order across topic group. Concurrency is at most the number of unique keys in a
++         * topic, limited by the max concurrency or uncommitted settings.
++         */
++        KEY_GROUP_EXCLUSIVE
+     }
+ 
+     /**
+@@ -419,6 +441,34 @@ public class ParallelConsumerOptions<K, V> {
+     @Builder.Default
+     private final Integer batchSize = 1;
+ 
++    /**
++     * We can limit max bytes present in one batch. In case if batch size is set and max bytes is not set, then default
++     * max bytes is 1MB. If {@link ParallelConsumerOptions#getOrdering()} is KEY_BATCH_EXCLUSIVE then max bytes config
++     * is not consider to divide into batches
++     *
++     * @see ParallelConsumerOptions#getBatchBytes()
++     */
++    @Builder.Default
++    private final Long batchBytes = 1000000L;
++
++    /**
++     * We can create batches after certain time. In case if batch size is not getting full, we can delay creating
++     * batches and try to accumulate as many requests as possible. In effect only if batch size is higher than 1.
++     *
++     * @see ParallelConsumerOptions#getBatchWindowTimeInMs()
++     */
++    @Builder.Default
++    private final Long batchWindowTimeInMs = 1L;
++
++    /**
++     * Wait on polling strategy to reduce frequent poll calls. Based on certain algorithm, we can wait on polling or not
++     * wait at all if not configured.
++     *
++     * @see ParallelConsumerOptions#getWaitPollingStrategy()
++     */
++    @Builder.Default
++    private WaitPollingStrategy waitPollingStrategy = null;
++
+     /**
+      * Configure the amount of delay a record experiences, before a warning is logged.
+      */
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelEoSStreamProcessor.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelEoSStreamProcessor.java
+index 8df85f17..4e852f52 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelEoSStreamProcessor.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/ParallelEoSStreamProcessor.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.csid.utils.TimeUtils;
+@@ -10,9 +10,10 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
+ import io.confluent.parallelconsumer.internal.PCModule;
+ import io.confluent.parallelconsumer.internal.ProducerManager;
+ import lombok.SneakyThrows;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.producer.ProducerRecord;
+ import org.apache.kafka.clients.producer.RecordMetadata;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ import pl.tlinkowski.unij.api.UniLists;
+ 
+ import java.util.ArrayList;
+@@ -28,9 +29,9 @@ import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.P
+ import static io.confluent.parallelconsumer.internal.UserFunctions.carefullyRun;
+ import static java.util.Optional.of;
+ 
+-@Slf4j
+ public class ParallelEoSStreamProcessor<K, V> extends AbstractParallelEoSStreamProcessor<K, V>
+         implements ParallelStreamProcessor<K, V> {
++    private static final Logger log = LogManager.getLogger(ParallelEoSStreamProcessor.class);
+ 
+     /**
+      * Construct the AsyncConsumer by wrapping this passed in consumer and producer, which can be configured any which
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/WaitPollingStrategy.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/WaitPollingStrategy.java
+new file mode 100644
+index 00000000..2136b731
+--- /dev/null
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/WaitPollingStrategy.java
+@@ -0,0 +1,9 @@
++package io.confluent.parallelconsumer;
++
++/*-
++ * Copyright (C) 2020-2024 Confluent, Inc.
++ */
++
++public interface WaitPollingStrategy {
++    void execute(int polledSize);
++}
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractOffsetCommitter.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractOffsetCommitter.java
+index 6327ab1f..65de5f26 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractOffsetCommitter.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractOffsetCommitter.java
+@@ -1,22 +1,23 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.state.WorkManager;
+ import lombok.RequiredArgsConstructor;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.Map;
+ import java.util.concurrent.TimeoutException;
+ 
+-@Slf4j
+ @RequiredArgsConstructor
+ public abstract class AbstractOffsetCommitter<K, V> implements OffsetCommitter {
++    private static final Logger log = LogManager.getLogger(AbstractOffsetCommitter.class);
+ 
+     protected final ConsumerManager<K, V> consumerMgr;
+     protected final WorkManager<K, V> wm;
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractParallelEoSStreamProcessor.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractParallelEoSStreamProcessor.java
+index b0029988..7a99a2bd 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractParallelEoSStreamProcessor.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/AbstractParallelEoSStreamProcessor.java
+@@ -1,26 +1,29 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
++import com.google.common.collect.ListMultimap;
+ import io.confluent.csid.utils.SupplierUtils;
+ import io.confluent.csid.utils.TimeUtils;
+ import io.confluent.parallelconsumer.*;
+ import io.confluent.parallelconsumer.metrics.PCMetrics;
+ import io.confluent.parallelconsumer.metrics.PCMetricsDef;
++import io.confluent.parallelconsumer.state.ShardKey;
+ import io.confluent.parallelconsumer.state.WorkContainer;
+ import io.confluent.parallelconsumer.state.WorkManager;
+ import io.micrometer.core.instrument.Gauge;
+ import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+ import lombok.*;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.clients.consumer.KafkaConsumer;
+ import org.apache.kafka.clients.consumer.MockConsumer;
+ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ import org.slf4j.MDC;
+ 
+ import javax.naming.InitialContext;
+@@ -53,8 +56,8 @@ import static lombok.AccessLevel.PROTECTED;
+ /**
+  * @see ParallelConsumer
+  */
+-@Slf4j
+ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements ParallelConsumer<K, V>, ConsumerRebalanceListener, Closeable {
++    private static final Logger log = LogManager.getLogger(AbstractParallelEoSStreamProcessor.class);
+ 
+     public static final String MDC_INSTANCE_ID = "pcId";
+ 
+@@ -75,6 +78,9 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+     @Getter(PROTECTED)
+     protected final ParallelConsumerOptions<K, V> options;
+ 
++    @Getter
++    private ActionListeners<K, V> actionListeners;
++
+     /**
+      * Injectable clock for testing
+      */
+@@ -279,6 +285,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+         this.shutdownTimeout = options.getShutdownTimeout();
+         this.drainTimeout = options.getDrainTimeout();
+         this.consumer = options.getConsumer();
++        actionListeners = new ActionListeners<>(consumer);
+ 
+         validateConfiguration();
+ 
+@@ -340,21 +347,26 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+     }
+ 
+     protected ThreadPoolExecutor setupWorkerPool(int poolSize) {
+-        ThreadFactory defaultFactory;
+-        try {
+-            defaultFactory = InitialContext.doLookup(options.getManagedThreadFactory());
+-        } catch (NamingException e) {
+-            log.debug("Using Java SE Thread", e);
+-            defaultFactory = Executors.defaultThreadFactory();
+-        }
+-        ThreadFactory finalDefaultFactory = defaultFactory;
+-        ThreadFactory namingThreadFactory = r -> {
+-            Thread thread = finalDefaultFactory.newThread(r);
+-            String name = thread.getName();
+-            thread.setName("pc-" + name);
+-            this.getMyId().ifPresent(id -> thread.setName("pc-" + name + "-" + id));
+-            return thread;
+-        };
++        ThreadFactory namingThreadFactory;
++        if (options.getThreadFactory() == null) {
++            ThreadFactory defaultFactory;
++            try {
++                defaultFactory = InitialContext.doLookup(options.getManagedThreadFactory());
++            } catch (NamingException e) {
++                log.debug("Using Java SE Thread", e);
++                defaultFactory = Executors.defaultThreadFactory();
++            }
++            ThreadFactory finalDefaultFactory = defaultFactory;
++            namingThreadFactory = r -> {
++                Thread thread = finalDefaultFactory.newThread(r);
++                String name = thread.getName();
++                thread.setName("pc-" + name);
++                this.getMyId().ifPresent(id -> thread.setName("pc-" + name + "-" + id));
++                return thread;
++            };
++        } else {
++            namingThreadFactory = options.getThreadFactory();
++        }
+         ThreadPoolExecutor.AbortPolicy rejectionHandler = new ThreadPoolExecutor.AbortPolicy();
+         LinkedBlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>();
+         return new ThreadPoolExecutor(poolSize, poolSize, 0L, MILLISECONDS, workQueue,
+@@ -592,7 +604,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+                     //Requesting threads shutdown immediately - inflight threads will be interrupted at this point.
+                     workerThreadPool.get().shutdownNow();
+                     //Give a second for any interrupt handling / resource cleanup in user functions
+-                    workerThreadPool.get().awaitTermination(toSeconds(Duration.ofSeconds(1)), SECONDS);
++                    workerThreadPool.get().awaitTermination(toSeconds(Duration.ofSeconds(5)), SECONDS);
+                 }
+             } catch (InterruptedException e) {
+                 log.error("InterruptedException", e);
+@@ -777,6 +789,14 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+             commitOffsetsThatAreReady();
+         }
+ 
++        if (options.getBatchSize() > 1 && wm.getNumberOfWorkQueuedInShardsAwaitingSelection() < options.getBatchSize()) {
++            try {
++                Thread.sleep(options.getBatchWindowTimeInMs());
++            } catch (InterruptedException e) {
++                log.trace("Woke up", e);
++            }
++        }
++
+         // distribute more work
+         retrieveAndDistributeNewWork(userFunction, callback);
+ 
+@@ -797,10 +817,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+         // sanity - supervise the poller
+         brokerPollSubsystem.supervise();
+ 
+-        // thread yield for spin lock avoidance
+-        Duration duration = Duration.ofMillis(1);
+         try {
+-            Thread.sleep(duration.toMillis());
++            Thread.sleep(1L);
+         } catch (InterruptedException e) {
+             log.trace("Woke up", e);
+         }
+@@ -819,7 +837,7 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+      */
+     private void maybeWakeupPoller() {
+         if (state == RUNNING) {
+-            if (!wm.isSufficientlyLoaded() && brokerPollSubsystem.isPausedForThrottling()) {
++            if (!getActionListeners().isPausing() && !wm.isSufficientlyLoaded() && brokerPollSubsystem.isPausedForThrottling()) {
+                 log.debug("Found Poller paused with not enough front loaded messages, ensuring poller is awake (mail: {} vs target: {})",
+                         wm.getNumberOfWorkQueuedInShardsAwaitingSelection(),
+                         options.getTargetAmountOfRecordsInFlight());
+@@ -856,14 +874,23 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+ 
+         //
+         if (state == RUNNING || state == DRAINING) {
+-            int delta = calculateQuantityToRequest();
+-            var records = wm.getWorkIfAvailable(delta);
++            if (getActionListeners().shouldProcess()) {
++                int delta = calculateQuantityToRequest();
++                var records = wm.getWorkIfAvailableInternal(delta);
+ 
+-            gotWorkCount = records.size();
+-            lastWorkRequestWasFulfilled = gotWorkCount >= delta;
++                gotWorkCount = records.size();
++                lastWorkRequestWasFulfilled = gotWorkCount >= delta;
+ 
+-            log.trace("Loop: Submit to pool");
+-            submitWorkToPool(userFunction, callback, records);
++                log.trace("Loop: Submit to pool");
++                submitWorkToPool(userFunction, callback, records);
++            } else {
++                try {
++                    Thread.sleep(100);
++                } catch (Exception ex) {
++                    log.error("Thread interrupted before submitting to pool");
++                    Thread.currentThread().interrupt();
++                }
++            }
+         }
+ 
+         //
+@@ -883,30 +910,39 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+      */
+     protected <R> void submitWorkToPool(Function<PollContextInternal<K, V>, List<R>> usersFunction,
+                                         Consumer<R> callback,
+-                                        List<WorkContainer<K, V>> workToProcess) {
++                                        ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
+         if (state.equals(CLOSING) || state.equals(CLOSED)) {
+             log.debug("Not submitting new work as Parallel Consumer is in {} state, incoming work: {}, Pool stats: {}", state, workToProcess.size(), workerThreadPool.get());
+         }
++
++        List<List<WorkContainer<K, V>>> batches = null;
+         if (!workToProcess.isEmpty()) {
+             log.debug("New work incoming: {}, Pool stats: {}", workToProcess.size(), workerThreadPool.get());
+ 
+             // perf: could inline makeBatches
+-            var batches = makeBatches(workToProcess);
+-
+-            // debugging
+-            if (log.isDebugEnabled()) {
+-                var sizes = batches.stream().map(List::size).sorted().collect(Collectors.toList());
+-                log.debug("Number batches: {}, smallest {}, sizes {}", batches.size(), sizes.stream().findFirst().get(), sizes);
+-                List<Integer> integerStream = sizes.stream().filter(x -> x < (int) options.getBatchSize()).collect(Collectors.toList());
+-                if (integerStream.size() > 1) {
+-                    log.warn("More than one batch isn't target size: {}. Input number of batches: {}", integerStream, batches.size());
++            batches = makeBatches(workToProcess);
++
++            if (!batches.isEmpty()) {
++                // debugging
++                if (log.isDebugEnabled()) {
++                    var sizes = batches.stream().map(List::size).sorted().collect(Collectors.toList());
++                    log.debug("Number batches: {}, smallest {}, sizes {}", batches.size(), sizes.stream().findFirst().get(), sizes);
++                    List<Integer> integerStream = sizes.stream().filter(x -> x < (int) options.getBatchSize()).collect(Collectors.toList());
++                    if (integerStream.size() > 1) {
++                        log.warn("More than one batch isn't target size: {}. Input number of batches: {}", integerStream, batches.size());
++                    }
+                 }
+             }
++        }
+ 
+-            // submit
+-            for (var batch : batches) {
+-                submitWorkToPoolInner(usersFunction, callback, batch);
+-            }
++        if (batches == null) {
++            batches = new ArrayList<>();
++        }
++
++        getActionListeners().beforeFunctionCall(batches);
++        // submit
++        for (var batch : batches) {
++            submitWorkToPoolInner(usersFunction, callback, batch);
+         }
+     }
+ 
+@@ -915,39 +951,88 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+                                            final List<WorkContainer<K, V>> batch) {
+         // for each record, construct dispatch to the executor and capture a Future
+         log.trace("Sending work ({}) to pool", batch);
+-        Future outputRecordFuture = workerThreadPool.get().submit(() -> {
+-            addInstanceMDC();
+-            return runUserFunction(usersFunction, callback, batch);
+-        });
+-        // for a batch, each message in the batch shares the same result
+-        for (final WorkContainer<K, V> workContainer : batch) {
+-            workContainer.setFuture(outputRecordFuture);
++
++        if (!batch.isEmpty()) {
++            Future outputRecordFuture = workerThreadPool.get().submit(() -> {
++                addInstanceMDC();
++                return runUserFunction(usersFunction, callback, batch);
++            });
++            // for a batch, each message in the batch shares the same result
++            for (final WorkContainer<K, V> workContainer : batch) {
++                workContainer.setFuture(outputRecordFuture);
++            }
+         }
+     }
+ 
+-    private List<List<WorkContainer<K, V>>> makeBatches(List<WorkContainer<K, V>> workToProcess) {
++    private List<List<WorkContainer<K, V>>> makeBatches(ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
+         int maxBatchSize = options.getBatchSize();
+-        return partition(workToProcess, maxBatchSize);
++        long maxBatchBytes = options.getBatchBytes();
++        return partition(workToProcess, maxBatchSize, maxBatchBytes);
+     }
+ 
+-    private static <T> List<List<T>> partition(Collection<T> sourceCollection, int maxBatchSize) {
+-        List<List<T>> listOfBatches = new ArrayList<>();
+-        List<T> batchInConstruction = new ArrayList<>();
+-
++    private <K, V> List<List<WorkContainer<K, V>>> partition(ListMultimap<ShardKey, WorkContainer<K, V>> sourceCollection, int maxBatchSize, final long maxBatchBytes) {
++        List<List<WorkContainer<K, V>>> listOfBatches = new ArrayList<>();
++        List<WorkContainer<K, V>> batchInConstruction = new ArrayList<>();
+         //
+-        for (T item : sourceCollection) {
+-            batchInConstruction.add(item);
+-
+-            //
+-            if (batchInConstruction.size() == maxBatchSize) {
++        if (options.getOrdering().equals(ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE) && maxBatchSize > 1) {
++            Map<ShardKey, List<WorkContainer<K, V>>> shardKeyListMap = new HashMap<>();
++            Map<ShardKey, Integer> keyCounts = new HashMap<>();
++            for (final ShardKey shardKey : sourceCollection.keySet()) {
++                keyCounts.put(shardKey, sourceCollection.get(shardKey).size());
++                shardKeyListMap.put(shardKey, sourceCollection.get(shardKey));
++            }
++            while (!keyCounts.isEmpty()) {
++                Iterator<Map.Entry<ShardKey, Integer>> entryIterator = keyCounts.entrySet().iterator();
++                boolean added = false;
++                while (entryIterator.hasNext()) {
++                    Map.Entry<ShardKey, Integer> entry = entryIterator.next();
++                    int keyCount = entry.getValue();
++                    if (batchInConstruction.size() >= maxBatchSize) {
++                        listOfBatches.add(batchInConstruction);
++                        batchInConstruction = new ArrayList<>();
++                        added = false;
++                    }
++                    if (keyCount >= maxBatchSize) {
++                        listOfBatches.add(shardKeyListMap.get(entry.getKey()));
++                        entryIterator.remove();
++                    } else if ((batchInConstruction.size() + keyCount) <= maxBatchSize) {
++                        batchInConstruction.addAll(shardKeyListMap.get(entry.getKey()));
++                        entryIterator.remove();
++                        added = true;
++                    }
++                }
++                if (!added && !batchInConstruction.isEmpty()) {
++                    listOfBatches.add(batchInConstruction);
++                    batchInConstruction = new ArrayList<>();
++                }
++            }
++            // add partial tail
++            if (!batchInConstruction.isEmpty()) {
+                 listOfBatches.add(batchInConstruction);
+-                batchInConstruction = new ArrayList<>();
+             }
+-        }
++        } else {
++            long batchBytes = 0;
++            for (final WorkContainer<K, V> toProcess : sourceCollection.values()) {
++                long crsize = toProcess.getCr().serializedValueSize() + toProcess.getCr().serializedKeySize();
++                batchBytes += crsize;
++                if (batchBytes >= maxBatchBytes && !batchInConstruction.isEmpty()) {
++                    listOfBatches.add(batchInConstruction);
++                    batchInConstruction = new ArrayList<>();
++                    batchBytes = crsize;
++                }
++                batchInConstruction.add(toProcess);
+ 
+-        // add partial tail
+-        if (!batchInConstruction.isEmpty()) {
+-            listOfBatches.add(batchInConstruction);
++                //
++                if (batchInConstruction.size() >= maxBatchSize) {
++                    listOfBatches.add(batchInConstruction);
++                    batchInConstruction = new ArrayList<>();
++                    batchBytes = 0;
++                }
++            }
++            // add partial tail
++            if (!batchInConstruction.isEmpty()) {
++                listOfBatches.add(batchInConstruction);
++            }
+         }
+ 
+         if (log.isDebugEnabled()) {
+@@ -1447,4 +1532,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
+             log.debug("Skipping transition of parallel consumer to state running. Current state is {}.", this.state);
+         }
+     }
++
++    public void registerActionListener(final ActionListener<K, V> actionListener) {
++        actionListeners.registerListener(actionListener);
++    }
+ }
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ActionListeners.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ActionListeners.java
+new file mode 100644
+index 00000000..1b1d1cf7
+--- /dev/null
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ActionListeners.java
+@@ -0,0 +1,127 @@
++package io.confluent.parallelconsumer.internal;
++
++/*-
++ * Copyright (C) 2020-2024 Confluent, Inc.
++ */
++
++import io.confluent.parallelconsumer.ActionListener;
++import io.confluent.parallelconsumer.state.WorkContainer;
++import lombok.Getter;
++import org.apache.kafka.clients.consumer.Consumer;
++import org.apache.kafka.clients.consumer.ConsumerRecord;
++import org.apache.kafka.clients.consumer.ConsumerRecords;
++import org.apache.kafka.common.TopicPartition;
++
++import java.util.*;
++
++public class ActionListeners<K, V> {
++    @Getter
++    private final List<ActionListener<K, V>> actionListeners = new ArrayList<>();
++    private final Consumer<K, V> consumer;
++    @Getter
++    private boolean isPausing;
++
++    public ActionListeners(Consumer<K, V> consumer) {
++        this.consumer = consumer;
++    }
++
++    public boolean isAssignmentChanged() {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            if (actionListener.isAssignmentChanged()) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    public void refresh() {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.refresh();
++        }
++    }
++
++    public boolean shouldProcess() {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            if (!actionListener.shouldProcess()) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    public Set<TopicPartition> pausePartitions() {
++        Set<TopicPartition> allPausedPartitions = new HashSet<>();
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            Set<TopicPartition> pausedPartitions = actionListener.pausePartitions();
++            if (pausedPartitions != null && !pausedPartitions.isEmpty()) {
++                allPausedPartitions.addAll(pausedPartitions);
++            }
++        }
++        if (allPausedPartitions.isEmpty()) {
++            isPausing = false;
++        } else {
++            consumer.pause(allPausedPartitions);
++            isPausing = true;
++        }
++        return allPausedPartitions;
++    }
++
++    public ConsumerRecords<K, V> afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.afterPoll(records);
++        }
++        return new ConsumerRecords<K, V>(records);
++    }
++
++    public boolean couldBeTakenAsWork(final ConsumerRecord<K, V> consumerRecord) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            if (!actionListener.couldBeTakenAsWork(consumerRecord)) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    public void beforeFunctionCall(final List<List<WorkContainer<K, V>>> batches) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.beforeFunctionCall(batches);
++        }
++    }
++
++    public boolean isNoisy(final ConsumerRecord<K, V> consumerRecord) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            if (actionListener.isNoisy(consumerRecord)) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    public void functionError(final List<ConsumerRecord<K, V>> consumerRecords) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.functionError(consumerRecords);
++        }
++    }
++
++    public void afterFunctionCall(final List<ConsumerRecord<K, V>> consumerRecords, final Map<String, Object> properties) {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.afterFunctionCall(consumerRecords, properties);
++        }
++    }
++
++    public void clear() {
++        for (final ActionListener<K, V> actionListener : actionListeners) {
++            actionListener.clear();
++        }
++    }
++
++    public boolean isEmpty() {
++        return actionListeners.isEmpty();
++    }
++
++    void registerListener(ActionListener<K, V> actionListener) {
++        if (actionListener != null && actionListener.isEnabled()) {
++            actionListeners.add(actionListener);
++        }
++    }
++}
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/BrokerPollSystem.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/BrokerPollSystem.java
+index 66cabb56..d9e7ae1d 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/BrokerPollSystem.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/BrokerPollSystem.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+@@ -13,9 +13,10 @@ import io.micrometer.core.instrument.Gauge;
+ import lombok.Getter;
+ import lombok.Setter;
+ import lombok.SneakyThrows;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRecords;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ import org.slf4j.MDC;
+ 
+ import javax.naming.InitialContext;
+@@ -37,8 +38,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
+  * @param <K>
+  * @param <V>
+  */
+-@Slf4j
+ public class BrokerPollSystem<K, V> implements OffsetCommitter {
++    private static final Logger log = LogManager.getLogger(BrokerPollSystem.class);
+ 
+     private final ConsumerManager<K, V> consumerManager;
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerManager.java
+index fc4b7e53..e9b42a18 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerManager.java
+@@ -1,32 +1,33 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+-import lombok.RequiredArgsConstructor;
+-import lombok.extern.slf4j.Slf4j;
++import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import org.apache.kafka.clients.consumer.*;
+ import org.apache.kafka.common.TopicPartition;
+ import org.apache.kafka.common.errors.WakeupException;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ import pl.tlinkowski.unij.api.UniMaps;
+ 
+ import java.time.Duration;
+-import java.util.Map;
+-import java.util.Set;
++import java.util.*;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ 
++import static java.util.concurrent.TimeUnit.MILLISECONDS;
++
+ /**
+  * Delegate for {@link KafkaConsumer}
+  */
+-@Slf4j
+-@RequiredArgsConstructor
+ public class ConsumerManager<K, V> {
+-
++    private static final Logger log = LogManager.getLogger(ConsumerManager.class);
+     private final Consumer<K, V> consumer;
+-
++    private final ParallelConsumerOptions<K, V> consumerOptions;
++    private final ActionListeners<K, V> actionListeners;
+     private final AtomicBoolean pollingBroker = new AtomicBoolean(false);
+-
++    private SystemTimer systemTimer;
+ 
+     /**
+      * Since Kakfa 2.7, multi-threaded access to consumer group metadata was blocked, so before and after polling, save
+@@ -43,6 +44,13 @@ public class ConsumerManager<K, V> {
+     private int noWakeups = 0;
+     private boolean commitRequested;
+ 
++    public ConsumerManager(AbstractParallelEoSStreamProcessor<K, V> apc) {
++        this.consumerOptions = apc.getOptions();
++        this.consumer = apc.getOptions().getConsumer();
++        this.actionListeners = apc.getActionListeners();
++        systemTimer = new SystemTimer(0, 300000, MILLISECONDS);
++    }
++
+     ConsumerRecords<K, V> poll(Duration requestedLongPollTimeout) {
+         Duration timeoutToUse = requestedLongPollTimeout;
+         ConsumerRecords<K, V> records;
+@@ -52,10 +60,7 @@ public class ConsumerManager<K, V> {
+                 timeoutToUse = Duration.ofMillis(1);// disable long poll, as commit needs performing
+                 commitRequested = false;
+             }
+-            pollingBroker.set(true);
+-            updateCache();
+-            log.debug("Poll starting with timeout: {}", timeoutToUse);
+-            records = consumer.poll(timeoutToUse);
++            records = pollWithActionListener(timeoutToUse);
+             log.debug("Poll completed normally (after timeout of {}) and returned {}...", timeoutToUse, records.count());
+             updateCache();
+         } catch (WakeupException w) {
+@@ -63,12 +68,44 @@ public class ConsumerManager<K, V> {
+             log.debug("Awoken from broker poll");
+             log.trace("Wakeup caller is:", w);
+             records = new ConsumerRecords<>(UniMaps.of());
++        } catch (IllegalStateException ex) {
++            log.error("Failed to poll from broker", ex);
++            records = new ConsumerRecords<>(UniMaps.of());
+         } finally {
+             pollingBroker.set(false);
+         }
++
++        if (consumerOptions.getWaitPollingStrategy() != null) {
++            consumerOptions.getWaitPollingStrategy().execute(records.count());
++        }
++
+         return records;
+     }
+ 
++    private ConsumerRecords<K, V> pollWithActionListener(final Duration timeoutToUse) {
++        if (actionListeners.isAssignmentChanged()) {
++            actionListeners.clear();
++        }
++        actionListeners.refresh();
++        if (actionListeners.shouldProcess()) {
++            Set<TopicPartition> pausedPartitions = actionListeners.pausePartitions();
++
++            pollingBroker.set(true);
++            updateCache();
++            log.debug("Poll starting with timeout: {}", timeoutToUse);
++
++            ConsumerRecords<K, V> partitionRecords = consumer.poll(timeoutToUse);
++            Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
++            for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
++                records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
++            }
++            ConsumerRecords<K, V> consumerRecords = actionListeners.afterPoll(records);
++            consumer.resume(pausedPartitions);
++            return consumerRecords;
++        }
++        return new ConsumerRecords<>(UniMaps.of());
++    }
++
+     protected void updateCache() {
+         metaCache = consumer.groupMetadata();
+         pausedPartitionSizeCache = consumer.paused().size();
+@@ -82,7 +119,7 @@ public class ConsumerManager<K, V> {
+     public void wakeup() {
+         // boolean reduces the chances of a mis-timed call to wakeup, but doesn't prevent all spurious wake up calls to other methods like #commit
+         // if the call to wakeup happens /after/ the check for a wake up state inside #poll, then the next call will through the wake up exception (i.e. #commit)
+-        if (pollingBroker.get()) {
++        if (pollingBroker.get() && systemTimer.isExpiredResetOnTrue()) {
+             log.debug("Waking up consumer");
+             consumer.wakeup();
+         }
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerOffsetCommitter.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerOffsetCommitter.java
+index c4393fab..d6ce6d87 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerOffsetCommitter.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ConsumerOffsetCommitter.java
+@@ -1,17 +1,18 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode;
+ import io.confluent.parallelconsumer.state.WorkManager;
+ import lombok.Value;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.util.Map;
+@@ -28,8 +29,8 @@ import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.P
+  *
+  * @see CommitMode
+  */
+-@Slf4j
+ public class ConsumerOffsetCommitter<K, V> extends AbstractOffsetCommitter<K, V> implements OffsetCommitter {
++    private static final Logger log = LogManager.getLogger(ConsumerOffsetCommitter.class);
+ 
+     /**
+      * Chosen arbitrarily - retries should never be needed, if they are it's an invalid state
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/DynamicLoadFactor.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/DynamicLoadFactor.java
+index 38a3034b..58497365 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/DynamicLoadFactor.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/DynamicLoadFactor.java
+@@ -5,7 +5,8 @@ package io.confluent.parallelconsumer.internal;
+  */
+ 
+ import lombok.Getter;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.time.Instant;
+@@ -18,8 +19,8 @@ import java.time.Instant;
+  * ({@link #isNotCoolingDown()})  and b) too soon after starting the system ({@link #isWarmUpPeriodOver()}).
+  */
+ // todo make so can be fractional like 50% - this is because some systems need a fractional factor, like 1.1 or 1.2 rather than 2
+-@Slf4j
+ public class DynamicLoadFactor {
++    private static final Logger log = LogManager.getLogger(DynamicLoadFactor.class);
+ 
+     /**
+      * Don't change this unless you know what you're doing.
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ExternalEngine.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ExternalEngine.java
+index 45dade40..1dfeab88 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ExternalEngine.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ExternalEngine.java
+@@ -1,13 +1,14 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import io.confluent.parallelconsumer.PollContextInternal;
+ import io.confluent.parallelconsumer.state.WorkContainer;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.List;
+ import java.util.concurrent.ThreadPoolExecutor;
+@@ -17,8 +18,8 @@ import static io.confluent.csid.utils.StringUtils.msg;
+ /**
+  * Overrides key aspects required in common for other threading engines like Vert.x and Reactor
+  */
+-@Slf4j
+ public abstract class ExternalEngine<K, V> extends AbstractParallelEoSStreamProcessor<K, V> {
++    private static final Logger log = LogManager.getLogger(ExternalEngine.class);
+ 
+     protected ExternalEngine(final ParallelConsumerOptions<K, V> newOptions) {
+         super(newOptions);
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/PCModule.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/PCModule.java
+index 133b26a7..f9fd9ba9 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/PCModule.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/PCModule.java
+@@ -67,7 +67,7 @@ public class PCModule<K, V> {
+ 
+     protected ConsumerManager<K, V> consumerManager() {
+         if (consumerManager == null) {
+-            consumerManager = new ConsumerManager<>(optionsInstance.getConsumer());
++            consumerManager = new ConsumerManager<>(pc());
+         }
+         return consumerManager;
+     }
+@@ -82,7 +82,7 @@ public class PCModule<K, V> {
+         return workManager;
+     }
+ 
+-    protected AbstractParallelEoSStreamProcessor<K, V> pc() {
++    public AbstractParallelEoSStreamProcessor<K, V> pc() {
+         if (parallelEoSStreamProcessor == null) {
+             parallelEoSStreamProcessor = new ParallelEoSStreamProcessor<>(options(), this);
+         }
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerManager.java
+index b9c16970..0c0d746f 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerManager.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.*;
+@@ -10,7 +10,6 @@ import lombok.Getter;
+ import lombok.NonNull;
+ import lombok.RequiredArgsConstructor;
+ import lombok.ToString;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.clients.producer.*;
+@@ -21,6 +20,8 @@ import org.apache.kafka.common.errors.InterruptException;
+ import org.apache.kafka.common.errors.InvalidProducerEpochException;
+ import org.apache.kafka.common.errors.ProducerFencedException;
+ import org.apache.kafka.common.errors.TimeoutException;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.util.ArrayList;
+@@ -37,9 +38,9 @@ import static io.confluent.csid.utils.StringUtils.msg;
+  * Sub system for interacting with the Producer and managing transactions (and thus offset committing through the
+  * Producer).
+  */
+-@Slf4j
+ @ToString(onlyExplicitlyIncluded = true)
+ public class ProducerManager<K, V> extends AbstractOffsetCommitter<K, V> implements OffsetCommitter {
++    private static final Logger log = LogManager.getLogger(ProducerManager.class);
+ 
+     @Getter
+     protected final ProducerWrapper<K, V> producerWrapper;
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerWrapper.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerWrapper.java
+index 6d3b87f0..92ef2d4c 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerWrapper.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/ProducerWrapper.java
+@@ -1,13 +1,12 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import lombok.*;
+ import lombok.experimental.Delegate;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.clients.producer.KafkaProducer;
+@@ -16,6 +15,8 @@ import org.apache.kafka.clients.producer.Producer;
+ import org.apache.kafka.clients.producer.internals.TransactionManager;
+ import org.apache.kafka.common.TopicPartition;
+ import org.apache.kafka.common.errors.ProducerFencedException;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.lang.reflect.Field;
+ import java.lang.reflect.Method;
+@@ -29,9 +30,9 @@ import static io.confluent.parallelconsumer.internal.ProducerWrapper.ProducerSta
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
+ @RequiredArgsConstructor
+ public class ProducerWrapper<K, V> implements Producer<K, V> {
++    private static final Logger log = LogManager.getLogger(ProducerWrapper.class);
+ 
+     /**
+      * Used to track Producer's transaction state, as it' isn't otherwise exposed.
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/SystemTimer.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/SystemTimer.java
+new file mode 100644
+index 00000000..2e197ad1
+--- /dev/null
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/internal/SystemTimer.java
+@@ -0,0 +1,51 @@
++package io.confluent.parallelconsumer.internal;
++
++/*-
++ * Copyright (C) 2020-2024 Confluent, Inc.
++ */
++
++import lombok.Getter;
++
++import java.util.concurrent.TimeUnit;
++
++/**
++ * Thread unsafe System timer which doesn't create any thread. In memory process timer
++ */
++public final class SystemTimer {
++    private final long periodNanos;
++    @Getter
++    private final long period;
++    private long start;
++
++    /**
++     * Creates a class that mimics a single threaded timer that expires periodically. If a call to
++     * {@link #isExpiredResetOnTrue()} occurs later than {@code period} since the timer was initiated or reset, this
++     * method returns true. Each time the method returns true the counter is reset. The timer starts with the specified
++     * time delay.
++     *
++     * @param delay    the initial delay before the timer starts
++     * @param period   the period between calls {@link #isExpiredResetOnTrue()}
++     * @param timeUnit the time unit of delay and period
++     */
++    public SystemTimer(long delay, long period, TimeUnit timeUnit) {
++        this.period = period;
++        periodNanos = timeUnit.toNanos(period);
++        start = System.nanoTime() + timeUnit.toNanos(delay);
++    }
++
++    /**
++     * Checks if a call to this method occurs later than {@code period} since the timer was initiated or reset. If that
++     * is the case the method returns true, otherwise it returns false. Each time this method returns true, the counter
++     * is reset (re-initiated) and a new cycle will start.
++     *
++     * @return true if the time elapsed since the last call returning true is greater than {@code period}. Returns false
++     *         otherwise.
++     */
++    public boolean isExpiredResetOnTrue() {
++        final boolean expired = System.nanoTime() - start >= periodNanos;
++        if (expired) {
++            start = System.nanoTime();
++        }
++        return expired;
++    }
++}
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/metrics/PCMetrics.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/metrics/PCMetrics.java
+index 3725a7af..2f8d6163 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/metrics/PCMetrics.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/metrics/PCMetrics.java
+@@ -1,15 +1,16 @@
+ package io.confluent.parallelconsumer.metrics;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+-import io.micrometer.core.instrument.*;
+ import io.micrometer.core.instrument.Timer;
++import io.micrometer.core.instrument.*;
+ import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
+ import io.micrometer.core.instrument.search.Search;
+ import lombok.Getter;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.*;
+ import java.util.concurrent.atomic.AtomicBoolean;
+@@ -20,8 +21,8 @@ import static java.util.Collections.singleton;
+ /**
+  * Main metrics collection and initialization service. Singleton - makes it easier to add metrics throughout the code
+  */
+-@Slf4j
+ public class PCMetrics {
++    private static final Logger log = LogManager.getLogger(PCMetrics.class);
+ 
+     /**
+      * Meter registry used for metrics - set through init call on singleton initialization. Configurable through
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/BitSetEncoder.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/BitSetEncoder.java
+index 39bdda7e..e2046daa 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/BitSetEncoder.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/BitSetEncoder.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.csid.utils.MathUtils;
+@@ -10,7 +10,8 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
+ import io.confluent.parallelconsumer.state.PartitionState;
+ import lombok.Getter;
+ import lombok.ToString;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.BufferOverflowException;
+ import java.nio.ByteBuffer;
+@@ -42,8 +43,8 @@ import static io.confluent.parallelconsumer.offsets.OffsetEncoding.*;
+  * @see OffsetBitSet
+  */
+ @ToString(callSuper = true)
+-@Slf4j
+ public class BitSetEncoder extends OffsetEncoder {
++    private static final Logger log = LogManager.getLogger(BitSetEncoder.class);
+ 
+     private static final Version DEFAULT_VERSION = Version.v2;
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/EncodedOffsetPair.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/EncodedOffsetPair.java
+index eb33e73f..f51d7bfa 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/EncodedOffsetPair.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/EncodedOffsetPair.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+@@ -9,7 +9,8 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
+ import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager.HighestOffsetAndIncompletes;
+ import lombok.Getter;
+ import lombok.SneakyThrows;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.ByteBuffer;
+ import java.util.Comparator;
+@@ -30,8 +31,8 @@ import static io.confluent.parallelconsumer.offsets.OffsetSimpleSerialisation.de
+  * @author Antony Stubbs
+  * @see #unwrap
+  */
+-@Slf4j
+ public final class EncodedOffsetPair implements Comparable<EncodedOffsetPair> {
++    private static final Logger log = LogManager.getLogger(EncodedOffsetPair.class);
+ 
+     public static final Comparator<EncodedOffsetPair> SIZE_COMPARATOR = Comparator.comparingInt(x -> x.data.capacity());
+     @Getter
+@@ -103,7 +104,7 @@ public final class EncodedOffsetPair implements Comparable<EncodedOffsetPair> {
+     }
+ 
+     public HighestOffsetAndIncompletes getDecodedIncompletes(long baseOffset) {
+-        return getDecodedIncompletes(baseOffset,  ParallelConsumerOptions.InvalidOffsetMetadataHandlingPolicy.FAIL);
++        return getDecodedIncompletes(baseOffset, ParallelConsumerOptions.InvalidOffsetMetadataHandlingPolicy.FAIL);
+     }
+ 
+     @SneakyThrows
+@@ -119,7 +120,7 @@ public final class EncodedOffsetPair implements Comparable<EncodedOffsetPair> {
+             case BitSetV2Compressed -> deserialiseBitSetWrapToIncompletes(BitSetV2, baseOffset, decompressZstd(data));
+             case RunLengthV2 -> runLengthDecodeToIncompletes(encoding, baseOffset, data);
+             case RunLengthV2Compressed -> runLengthDecodeToIncompletes(RunLengthV2, baseOffset, decompressZstd(data));
+-            case KafkaStreams, KafkaStreamsV2 ->{
++            case KafkaStreams, KafkaStreamsV2 -> {
+                 if (errorPolicy == ParallelConsumerOptions.InvalidOffsetMetadataHandlingPolicy.IGNORE) {
+                     log.warn("Ignoring existing Kafka Streams offset metadata and reusing offsets");
+                     yield HighestOffsetAndIncompletes.of(baseOffset);
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetBitSet.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetBitSet.java
+index 94b625d1..5bb8450c 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetBitSet.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetBitSet.java
+@@ -1,12 +1,13 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
+ import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager.HighestOffsetAndIncompletes;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.ByteBuffer;
+ import java.util.BitSet;
+@@ -23,8 +24,8 @@ import static io.confluent.csid.utils.Range.range;
+  * @author Antony Stubbs
+  * @see BitSetEncoder
+  */
+-@Slf4j
+ public class OffsetBitSet {
++    private static final Logger log = LogManager.getLogger(OffsetBitSet.class);
+ 
+     static String deserialiseBitSetWrap(ByteBuffer wrap, OffsetEncoding.Version version) {
+         wrap.rewind();
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetEncoder.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetEncoder.java
+index 4bfefe9f..a218c347 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetEncoder.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetEncoder.java
+@@ -1,12 +1,13 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import lombok.SneakyThrows;
+ import lombok.ToString;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.io.IOException;
+ import java.nio.ByteBuffer;
+@@ -19,8 +20,8 @@ import java.nio.ByteBuffer;
+  */
+ // metrics: avg offsets mapped per bit, average encoded size, avg time to encode,
+ @ToString
+-@Slf4j
+ public abstract class OffsetEncoder {
++    private static final Logger log = LogManager.getLogger(OffsetEncoder.class);
+ 
+     /**
+      * Implementation version of the encoding
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetMapCodecManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetMapCodecManager.java
+index 14d5af51..40d034f1 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetMapCodecManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetMapCodecManager.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+@@ -9,15 +9,16 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
+ import io.confluent.parallelconsumer.internal.PCModule;
+ import io.confluent.parallelconsumer.metrics.PCMetrics;
+ import io.confluent.parallelconsumer.metrics.PCMetricsDef;
+-import io.micrometer.core.instrument.Tag;
+ import io.confluent.parallelconsumer.state.PartitionState;
+ import io.micrometer.core.instrument.Counter;
++import io.micrometer.core.instrument.Tag;
+ import io.micrometer.core.instrument.Timer;
+ import lombok.Value;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
+ import org.apache.kafka.common.errors.WakeupException;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.ByteBuffer;
+ import java.nio.charset.Charset;
+@@ -44,8 +45,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
+  * @author Antony Stubbs
+  */
+ // metrics: avg time spend encoding, number of times each encoding used
+-@Slf4j
+ public class OffsetMapCodecManager<K, V> {
++    private static final Logger log = LogManager.getLogger(OffsetMapCodecManager.class);
+ 
+     /**
+      * Used to prevent tests running in parallel that depends on setting static state in this class. Manipulation of
+@@ -114,7 +115,7 @@ public class OffsetMapCodecManager<K, V> {
+     // todo remove consumer #233
+     public OffsetMapCodecManager(PCModule<K, V> module) {
+         this.module = module;
+-        if (module != null){
++        if (module != null) {
+             this.errorPolicy = module.options().getInvalidOffsetMetadataPolicy();
+         }
+         pcMetrics = module.pcMetrics();
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetRunLength.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetRunLength.java
+index fef1f2ce..72d091e6 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetRunLength.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetRunLength.java
+@@ -1,12 +1,13 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager.HighestOffsetAndIncompletes;
+ import lombok.experimental.UtilityClass;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.BufferUnderflowException;
+ import java.nio.ByteBuffer;
+@@ -24,9 +25,9 @@ import java.util.function.Supplier;
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
+ @UtilityClass
+ public class OffsetRunLength {
++    private static final Logger log = LogManager.getLogger(OffsetRunLength.class);
+ 
+     /**
+      * @return run length encoding, always starting with an 'o' count
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimpleSerialisation.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimpleSerialisation.java
+index cac34586..50f29f6f 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimpleSerialisation.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimpleSerialisation.java
+@@ -1,14 +1,16 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
++
+ import com.github.luben.zstd.ZstdInputStream;
+ import com.github.luben.zstd.ZstdOutputStream;
+ import lombok.SneakyThrows;
+ import lombok.experimental.UtilityClass;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.common.utils.ByteBufferInputStream;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ import org.xerial.snappy.SnappyInputStream;
+ import org.xerial.snappy.SnappyOutputStream;
+ 
+@@ -28,8 +30,8 @@ import static io.confluent.csid.utils.BackportUtils.readFully;
+  * @author Antony Stubbs
+  */
+ @UtilityClass
+-@Slf4j
+ public class OffsetSimpleSerialisation {
++    private static final Logger log = LogManager.getLogger(OffsetSimpleSerialisation.class);
+ 
+     @SneakyThrows
+     static String encodeAsJavaObjectStream(final Set<Long> incompleteOffsets) {
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimultaneousEncoder.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimultaneousEncoder.java
+index fa173bb7..ff110593 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimultaneousEncoder.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/offsets/OffsetSimultaneousEncoder.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.offsets;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.csid.utils.Range;
+@@ -10,7 +10,8 @@ import io.confluent.parallelconsumer.state.PartitionState;
+ import io.confluent.parallelconsumer.state.WorkManager;
+ import lombok.Getter;
+ import lombok.ToString;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.nio.ByteBuffer;
+ import java.util.*;
+@@ -30,9 +31,9 @@ import static io.confluent.parallelconsumer.state.PartitionState.KAFKA_OFFSET_AB
+  * @author Antony Stubbs
+  * @see #invoke()
+  */
+-@Slf4j
+ @ToString(onlyExplicitlyIncluded = true)
+ public class OffsetSimultaneousEncoder {
++    private static final Logger log = LogManager.getLogger(OffsetSimultaneousEncoder.class);
+ 
+     /**
+      * Size threshold in bytes after which compressing the encodings will be compared, as it seems to be typically worth
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionState.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionState.java
+index c42b77e7..e884c921 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionState.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionState.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.internal.BrokerPollSystem;
+@@ -18,11 +18,12 @@ import lombok.Getter;
+ import lombok.NonNull;
+ import lombok.Setter;
+ import lombok.ToString;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.clients.consumer.KafkaConsumer;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.*;
+ import java.util.concurrent.ConcurrentSkipListMap;
+@@ -41,9 +42,8 @@ import static lombok.AccessLevel.*;
+  * @see PartitionStateManager
+  */
+ @ToString
+-@Slf4j
+ public class PartitionState<K, V> {
+-
++    private static final Logger log = LogManager.getLogger(PartitionState.class);
+     /**
+      * Symbolic value for a parameter which is initialised as having an offset absent (instead of using Optional or
+      * null)
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionStateManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionStateManager.java
+index 214355c0..f38a1a31 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionStateManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/PartitionStateManager.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
+@@ -17,10 +17,11 @@ import io.micrometer.core.instrument.Gauge;
+ import io.micrometer.core.instrument.Tag;
+ import lombok.Getter;
+ import lombok.Setter;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.*;
+ import java.util.concurrent.ConcurrentHashMap;
+@@ -35,8 +36,8 @@ import java.util.stream.Collectors;
+  * @see PartitionState
+  */
+ // metrics: assigned partitions and their epochs, number of assigned partitions,
+-@Slf4j
+ public class PartitionStateManager<K, V> implements ConsumerRebalanceListener {
++    private static final Logger log = LogManager.getLogger(PartitionStateManager.class);
+ 
+     public static final double USED_PAYLOAD_THRESHOLD_MULTIPLIER_DEFAULT = 0.75;
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ProcessingShard.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ProcessingShard.java
+index e09741c9..ce6e1b7d 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ProcessingShard.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ProcessingShard.java
+@@ -1,24 +1,34 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
++import com.google.common.collect.LinkedListMultimap;
++import com.google.common.collect.ListMultimap;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
++import io.confluent.parallelconsumer.internal.ActionListeners;
+ import io.confluent.parallelconsumer.internal.RateLimiter;
+ import lombok.Getter;
+ import lombok.RequiredArgsConstructor;
+-import lombok.extern.slf4j.Slf4j;
++import org.apache.kafka.clients.consumer.ConsumerRecord;
++import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+-import java.util.*;
++import java.util.HashSet;
++import java.util.List;
++import java.util.NavigableMap;
++import java.util.Set;
+ import java.util.concurrent.ConcurrentSkipListMap;
+ import java.util.stream.Collectors;
+ 
+ import static io.confluent.csid.utils.BackportUtils.toSeconds;
+ import static io.confluent.csid.utils.JavaUtils.isGreaterThan;
+ import static io.confluent.csid.utils.StringUtils.msg;
++import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE;
+ import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.UNORDERED;
+ import static lombok.AccessLevel.PRIVATE;
+ 
+@@ -28,9 +38,9 @@ import static lombok.AccessLevel.PRIVATE;
+  * @author Antony Stubbs
+  * @see ShardManager
+  */
+-@Slf4j
+ @RequiredArgsConstructor
+ public class ProcessingShard<K, V> {
++    private static final Logger log = LogManager.getLogger(ProcessingShard.class);
+ 
+     /**
+      * Map of offset to WorkUnits.
+@@ -42,7 +52,7 @@ public class ProcessingShard<K, V> {
+      * mode).
+      */
+     @Getter
+-    private final NavigableMap<Long, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
++    private final NavigableMap<String, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
+ 
+     @Getter(PRIVATE)
+     private final ShardKey key;
+@@ -50,7 +60,6 @@ public class ProcessingShard<K, V> {
+     private final ParallelConsumerOptions<?, ?> options;
+ 
+     private final PartitionStateManager<K, V> pm;
+-
+     private final RateLimiter slowWarningRateLimit = new RateLimiter(5);
+ 
+     public boolean workIsWaitingToBeProcessed() {
+@@ -59,7 +68,7 @@ public class ProcessingShard<K, V> {
+     }
+ 
+     public void addWorkContainer(WorkContainer<K, V> wc) {
+-        long key = wc.offset();
++        String key = getWcKey(wc);
+         if (entries.containsKey(key)) {
+             log.debug("Entry for {} already exists in shard queue, dropping record", wc);
+         } else {
+@@ -67,9 +76,17 @@ public class ProcessingShard<K, V> {
+         }
+     }
+ 
+-    public void onSuccess(WorkContainer<?, ?> wc) {
++    private String getWcKey(WorkContainer<K, V> wc) {
++        return wc.getTopicPartition() + "-" + wc.offset();
++    }
++
++    private String getWcKey(ConsumerRecord<K, V> cr) {
++        return new TopicPartition(cr.topic(), cr.partition()) + "-" + cr.offset();
++    }
++
++    public void onSuccess(WorkContainer<K, V> wc) {
+         // remove work from shard's queue
+-        entries.remove(wc.offset());
++        entries.remove(getWcKey(wc));
+     }
+ 
+     public boolean isEmpty() {
+@@ -93,8 +110,8 @@ public class ProcessingShard<K, V> {
+                 .count();
+     }
+ 
+-    public WorkContainer<K, V> remove(long offset) {
+-        return entries.remove(offset);
++    public WorkContainer<K, V> remove(ConsumerRecord<K, V> consumerRecord) {
++        return entries.remove(getWcKey(consumerRecord));
+     }
+ 
+ 
+@@ -110,40 +127,61 @@ public class ProcessingShard<K, V> {
+     }
+ 
+ 
+-    ArrayList<WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta) {
++    ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta, ActionListeners<K, V> actionListeners) {
+         log.trace("Looking for work on shardQueueEntry: {}", getKey());
+ 
+         var slowWork = new HashSet<WorkContainer<?, ?>>();
+-        var workTaken = new ArrayList<WorkContainer<K, V>>();
++        ListMultimap<ShardKey, WorkContainer<K, V>> workTaken = LinkedListMultimap.create();
+ 
+         var iterator = entries.entrySet().iterator();
++        int keyBatchSize = 0;
+         while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
+             var workContainer = iterator.next().getValue();
+ 
+-            if (pm.couldBeTakenAsWork(workContainer)) {
+-                if (workContainer.isAvailableToTakeAsWork()) {
+-                    log.trace("Taking {} as work", workContainer);
+-                    workContainer.onQueueingForExecution();
+-                    workTaken.add(workContainer);
++            if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
++                if (pm.couldBeTakenAsWork(workContainer)) {
++                    if (workContainer.isAvailableToTakeAsWork()) {
++                        if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize < 1 && getCountWorkInFlight() < 1)) {
++                            log.trace("Taking {} as work", workContainer);
++                            workContainer.onQueueingForExecution();
++                            workTaken.put(key, workContainer);
++                            keyBatchSize++;
++                        } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) &&
++                                (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
++                            log.trace("Taking {} as work", workContainer);
++                            workContainer.onQueueingForExecution();
++                            workTaken.put(key, workContainer);
++                            keyBatchSize++;
++                        } else {
++                            break;
++                        }
++                    } else {
++                        log.trace("Skipping {} as work, not available to take as work", workContainer);
++                        addToSlowWorkMaybe(slowWork, workContainer);
++                    }
++
++                    if (isOrderRestricted()) {
++                        // can't take any more work from this shard, due to ordering restrictions
++                        // processing blocked on this shard, continue to next shard
++                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
++                        break;
++                    } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize >= options.getBatchSize())) {
++                        // can't take any more work from this shard, due to ordering restrictions
++                        // processing blocked on this shard, continue to next shard
++                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
++                        break;
++                    }
+                 } else {
+-                    log.trace("Skipping {} as work, not available to take as work", workContainer);
+-                    addToSlowWorkMaybe(slowWork, workContainer);
+-                }
+-
+-                if (isOrderRestricted()) {
+-                    // can't take any more work from this shard, due to ordering restrictions
+-                    // processing blocked on this shard, continue to next shard
+-                    log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
++                    // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
++                    //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
++                    //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
++                    //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
++                    //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
++                    //  matter.
++                    log.trace("Partition for shard {} is blocked for work taking, stopping shard scan", this);
+                     break;
+                 }
+             } else {
+-                // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
+-                //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
+-                //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
+-                //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
+-                //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
+-                //  matter.
+-                log.trace("Partition for shard {} is blocked for work taking, stopping shard scan", this);
+                 break;
+             }
+         }
+@@ -193,7 +231,7 @@ public class ProcessingShard<K, V> {
+     }
+ 
+     private boolean isOrderRestricted() {
+-        return options.getOrdering() != UNORDERED;
++        return !(options.getOrdering().equals(UNORDERED) || options.getOrdering().equals(KEY_BATCH_EXCLUSIVE));
+     }
+ 
+     // check if the work container is stale
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/RemovedPartitionState.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/RemovedPartitionState.java
+index 37d356d1..66fbce38 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/RemovedPartitionState.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/RemovedPartitionState.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.csid.utils.KafkaUtils;
+@@ -10,9 +10,10 @@ import io.confluent.parallelconsumer.internal.EpochAndRecordsMap;
+ import io.confluent.parallelconsumer.internal.PCModule;
+ import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager;
+ import lombok.NonNull;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.util.Optional;
+ import java.util.SortedSet;
+@@ -33,8 +34,8 @@ import java.util.TreeSet;
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
+ public class RemovedPartitionState<K, V> extends PartitionState<K, V> {
++    private static final Logger log = LogManager.getLogger(RemovedPartitionState.class);
+ 
+     private static final SortedSet<Long> READ_ONLY_EMPTY_SET = new TreeSet<>();
+ 
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardKey.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardKey.java
+index 4670cc8c..41f2726c 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardKey.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardKey.java
+@@ -1,9 +1,10 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
++import com.google.common.base.Strings;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
+ import lombok.*;
+ import lombok.experimental.FieldDefaults;
+@@ -11,7 +12,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.common.TopicPartition;
+ 
+ import java.util.Arrays;
++import java.util.Map;
+ import java.util.Objects;
++import java.util.concurrent.ConcurrentHashMap;
+ 
+ /**
+  * Simple value class for processing {@link ShardKey}s to make the various key systems type safe and extendable.
+@@ -23,6 +26,7 @@ import java.util.Objects;
+ @ToString
+ @EqualsAndHashCode
+ public class ShardKey {
++    private static final Map<String, String> TOPIC_GROUP_MAP = new ConcurrentHashMap();
+ 
+     public static ShardKey of(WorkContainer<?, ?> wc, ProcessingOrder ordering) {
+         return of(wc.getCr(), ordering);
+@@ -30,11 +34,26 @@ public class ShardKey {
+ 
+     public static ShardKey of(ConsumerRecord<?, ?> rec, ProcessingOrder ordering) {
+         return switch (ordering) {
++            case KEY_BATCH_EXCLUSIVE -> ofKeyBatchExclusive(rec);
++            case KEY_EXCLUSIVE -> ofKeyExclusive(rec);
++            case KEY_GROUP_EXCLUSIVE -> ofKeyGroupExclusive(rec);
+             case KEY -> ofKey(rec);
+             case PARTITION, UNORDERED -> ofTopicPartition(rec);
+         };
+     }
+ 
++    public static KeyBatchExclusiveOrderedKey ofKeyBatchExclusive(ConsumerRecord<?, ?> rec) {
++        return new KeyBatchExclusiveOrderedKey(rec);
++    }
++
++    public static KeyExclusiveOrderedKey ofKeyExclusive(ConsumerRecord<?, ?> rec) {
++        return new KeyExclusiveOrderedKey(rec);
++    }
++
++    public static KeyGroupExclusiveOrderedKey ofKeyGroupExclusive(ConsumerRecord<?, ?> rec) {
++        return new KeyGroupExclusiveOrderedKey(rec);
++    }
++
+     public static KeyOrderedKey ofKey(ConsumerRecord<?, ?> rec) {
+         return new KeyOrderedKey(rec);
+     }
+@@ -43,6 +62,92 @@ public class ShardKey {
+         return new TopicPartitionKey(new TopicPartition(rec.topic(), rec.partition()));
+     }
+ 
++    @Value
++    @RequiredArgsConstructor
++    @EqualsAndHashCode(callSuper = true)
++    public static class KeyBatchExclusiveOrderedKey extends ShardKey {
++
++        /**
++         * The key of the record being referenced. Nullable if record is produced with a null key.
++         */
++        KeyWithEquals key;
++
++        public KeyBatchExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
++            this(rec.key());
++        }
++
++        public KeyBatchExclusiveOrderedKey(final Object key) {
++            if (key instanceof KeyWithEquals) {
++                this.key = (KeyWithEquals) key;
++            } else {
++                this.key = new KeyWithEquals(key);
++            }
++        }
++    }
++
++    @Value
++    @RequiredArgsConstructor
++    @EqualsAndHashCode(callSuper = true)
++    public static class KeyExclusiveOrderedKey extends ShardKey {
++
++        /**
++         * The key of the record being referenced. Nullable if record is produced with a null key.
++         */
++        KeyWithEquals key;
++
++        public KeyExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
++            this(rec.key());
++        }
++
++        public KeyExclusiveOrderedKey(final Object key) {
++            if (key instanceof KeyWithEquals) {
++                this.key = (KeyWithEquals) key;
++            } else {
++                this.key = new KeyWithEquals(key);
++            }
++        }
++    }
++
++    @Value
++    @RequiredArgsConstructor
++    @EqualsAndHashCode(callSuper = true)
++    public static class KeyGroupExclusiveOrderedKey extends ShardKey {
++
++        String topicGroup;
++        /**
++         * The key of the record being referenced. Nullable if record is produced with a null key.
++         */
++        KeyWithEquals key;
++
++        public KeyGroupExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
++            this(rec.topic(), rec.key());
++        }
++
++        public KeyGroupExclusiveOrderedKey(final String topic, final Object key) {
++            String topicGroup = TOPIC_GROUP_MAP.get(topic);
++            if (Strings.isNullOrEmpty(topicGroup)) {
++                if (topic.contains("-")) {
++                    String[] delimitedTopic = topic.split("-");
++                    if (delimitedTopic.length >= 2) {
++                        topicGroup = delimitedTopic[delimitedTopic.length - 1];
++                        TOPIC_GROUP_MAP.put(topic, topicGroup);
++                    }
++                }
++
++                if (Strings.isNullOrEmpty(topicGroup)) {
++                    topicGroup = "default";
++                }
++            }
++
++            this.topicGroup = topicGroup;
++            if (key instanceof KeyWithEquals) {
++                this.key = (KeyWithEquals) key;
++            } else {
++                this.key = new KeyWithEquals(key);
++            }
++        }
++    }
++
+     @Value
+     @EqualsAndHashCode(callSuper = true)
+     public static class KeyOrderedKey extends ShardKey {
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardManager.java
+index ceac3f51..05027af9 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/ShardManager.java
+@@ -1,9 +1,11 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
++import com.google.common.collect.LinkedListMultimap;
++import com.google.common.collect.ListMultimap;
+ import io.confluent.csid.utils.LoopingResumingIterator;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
+@@ -15,9 +17,10 @@ import io.confluent.parallelconsumer.metrics.PCMetricsDef;
+ import io.micrometer.core.instrument.Gauge;
+ import lombok.AccessLevel;
+ import lombok.Getter;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.time.Instant;
+@@ -25,7 +28,7 @@ import java.util.*;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.stream.Collectors;
+ 
+-import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY;
++import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.*;
+ import static java.util.Optional.empty;
+ import static java.util.Optional.of;
+ 
+@@ -41,8 +44,8 @@ import static java.util.Optional.of;
+  * @author Antony Stubbs
+  */
+ // metrics: number of queues, average queue length
+-@Slf4j
+ public class ShardManager<K, V> {
++    private static final Logger log = LogManager.getLogger(ShardManager.class);
+ 
+     private final PCModule<K, V> module;
+ 
+@@ -167,7 +170,7 @@ public class ShardManager<K, V> {
+         if (processingShards.containsKey(shardKey)) {
+             // remove the work
+             ProcessingShard<K, V> shard = processingShards.get(shardKey);
+-            WorkContainer<K, V> removedWC = shard.remove(consumerRecord.offset());
++            WorkContainer<K, V> removedWC = shard.remove(consumerRecord);
+ 
+             // remove if in retry queue
+             this.retryQueue.remove(removedWC);
+@@ -195,14 +198,15 @@ public class ShardManager<K, V> {
+ 
+         // If using KEY ordering, where the shard key is a message key, garbage collect old shard keys (i.e. KEY ordering we may never see a message for this key again)
+         // If not, no point to remove the shard, as it will be reused for the next message from the same partition
+-        boolean keyOrdering = options.getOrdering().equals(KEY);
++        boolean keyOrdering = options.getOrdering().equals(KEY) || options.getOrdering().equals(KEY_EXCLUSIVE) ||
++                options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || options.getOrdering().equals(KEY_GROUP_EXCLUSIVE);
+         if (keyOrdering && shardOpt.isPresent() && shardOpt.get().isEmpty()) {
+             log.trace("Removing empty shard (key: {})", key);
+             this.processingShards.remove(key);
+         }
+     }
+ 
+-    public void onSuccess(WorkContainer<?, ?> wc) {
++    public void onSuccess(WorkContainer<K, V> wc) {
+         // remove from the retry queue if it's contained
+         this.retryQueue.remove(wc);
+ 
+@@ -240,12 +244,12 @@ public class ShardManager<K, V> {
+         return empty();
+     }
+ 
+-    public List<WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
++    public ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
+         LoopingResumingIterator<ShardKey, ProcessingShard<K, V>> shardQueueIterator =
+                 new LoopingResumingIterator<>(iterationResumePoint, this.processingShards);
+ 
+         //
+-        List<WorkContainer<K, V>> workFromAllShards = new ArrayList<>();
++        ListMultimap<ShardKey, WorkContainer<K, V>> workFromAllShards = LinkedListMultimap.create();
+ 
+         // loop over shards, and get work from each
+         Optional<Map.Entry<ShardKey, ProcessingShard<K, V>>> next = shardQueueIterator.next();
+@@ -255,8 +259,10 @@ public class ShardManager<K, V> {
+ 
+             //
+             int remainingToGet = requestedMaxWorkToRetrieve - workFromAllShards.size();
+-            var work = shard.getWorkIfAvailable(remainingToGet);
+-            workFromAllShards.addAll(work);
++            var work = shard.getWorkIfAvailable(remainingToGet, module.pc().getActionListeners());
++            if (work != null && !work.isEmpty()) {
++                workFromAllShards.putAll(work);
++            }
+ 
+             // next
+             next = shardQueueIterator.next();
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkContainer.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkContainer.java
+index 7b2ed241..fd2edbee 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkContainer.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkContainer.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import io.confluent.parallelconsumer.PollContextInternal;
+@@ -9,9 +9,10 @@ import io.confluent.parallelconsumer.RecordContext;
+ import io.confluent.parallelconsumer.internal.PCModule;
+ import io.confluent.parallelconsumer.internal.ProducerManager;
+ import lombok.*;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.common.TopicPartition;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.time.Instant;
+@@ -28,9 +29,9 @@ import static java.util.Optional.of;
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
+ @EqualsAndHashCode
+ public class WorkContainer<K, V> implements Comparable<WorkContainer<K, V>> {
++    private static final Logger log = LogManager.getLogger(WorkContainer.class);
+ 
+     static final String DEFAULT_TYPE = "DEFAULT";
+ 
+@@ -71,7 +72,7 @@ public class WorkContainer<K, V> implements Comparable<WorkContainer<K, V>> {
+     @Getter
+     private Optional<Throwable> lastFailureReason;
+ 
+-    private boolean inFlight = false;
++    private volatile boolean inFlight = false;
+ 
+     @Getter
+     private Optional<Boolean> maybeUserFunctionSucceeded = Optional.empty();
+diff --git a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkManager.java b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkManager.java
+index 0b1952dd..fb10883a 100644
+--- a/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkManager.java
++++ b/parallel-consumer-core/src/main/java/io/confluent/parallelconsumer/state/WorkManager.java
+@@ -1,9 +1,11 @@
+ package io.confluent.parallelconsumer.state;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
++import com.google.common.collect.LinkedListMultimap;
++import com.google.common.collect.ListMultimap;
+ import io.confluent.parallelconsumer.ParallelConsumerOptions;
+ import io.confluent.parallelconsumer.internal.*;
+ import io.confluent.parallelconsumer.metrics.PCMetrics;
+@@ -12,11 +14,11 @@ import io.micrometer.core.instrument.Counter;
+ import io.micrometer.core.instrument.Gauge;
+ import io.micrometer.core.instrument.Tag;
+ import lombok.Getter;
+-import lombok.extern.slf4j.Slf4j;
+ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+ import org.apache.kafka.common.TopicPartition;
+-import pl.tlinkowski.unij.api.UniLists;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ import java.time.Duration;
+ import java.util.*;
+@@ -39,8 +41,8 @@ import static lombok.AccessLevel.PUBLIC;
+  *
+  * @author Antony Stubbs
+  */
+-@Slf4j
+ public class WorkManager<K, V> implements ConsumerRebalanceListener {
++    private static final Logger log = LogManager.getLogger(WorkManager.class);
+ 
+     @Getter
+     private final ParallelConsumerOptions<K, V> options;
+@@ -131,16 +133,23 @@ public class WorkManager<K, V> implements ConsumerRebalanceListener {
+      * Get work with no limit on quantity, useful for testing.
+      */
+     public List<WorkContainer<K, V>> getWorkIfAvailable() {
+-        return getWorkIfAvailable(Integer.MAX_VALUE);
++        return getWorkIfAvailableInternal(Integer.MAX_VALUE).values().stream().toList();
+     }
+ 
+     /**
+      * Depth first work retrieval.
+      */
+     public List<WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
++        return getWorkIfAvailableInternal(requestedMaxWorkToRetrieve).values().stream().toList();
++    }
++
++    /**
++     * Depth first work retrieval.
++     */
++    public ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailableInternal(final int requestedMaxWorkToRetrieve) {
+         // optimise early
+         if (requestedMaxWorkToRetrieve < 1) {
+-            return UniLists.of();
++            return LinkedListMultimap.create(0);
+         }
+ 
+         //
+diff --git a/parallel-consumer-core/src/test/java/io/confluent/csid/utils/LongPollingMockConsumer.java b/parallel-consumer-core/src/test/java/io/confluent/csid/utils/LongPollingMockConsumer.java
+index 9fc8b534..39b09cd9 100644
+--- a/parallel-consumer-core/src/test/java/io/confluent/csid/utils/LongPollingMockConsumer.java
++++ b/parallel-consumer-core/src/test/java/io/confluent/csid/utils/LongPollingMockConsumer.java
+@@ -1,8 +1,9 @@
+ package io.confluent.csid.utils;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
++
+ import io.confluent.parallelconsumer.internal.AbstractParallelEoSStreamProcessor;
+ import lombok.Getter;
+ import lombok.SneakyThrows;
+diff --git a/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/internal/ProducerManagerTest.java b/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/internal/ProducerManagerTest.java
+index f716f151..49053c5f 100644
+--- a/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/internal/ProducerManagerTest.java
++++ b/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/internal/ProducerManagerTest.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.internal;
+ 
+ /*-
+- * Copyright (C) 2020-2023 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import com.google.common.truth.Truth;
+@@ -27,7 +27,6 @@ import org.mockito.Mockito;
+ import pl.tlinkowski.unij.api.UniLists;
+ import pl.tlinkowski.unij.api.UniMaps;
+ 
+-import java.time.Duration;
+ import java.util.List;
+ import java.util.concurrent.CountDownLatch;
+ import java.util.concurrent.Future;
+@@ -41,7 +40,6 @@ import static io.confluent.parallelconsumer.ManagedTruth.assertWithMessage;
+ import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.PERIODIC_TRANSACTIONAL_PRODUCER;
+ import static io.confluent.parallelconsumer.internal.ProducerWrapper.ProducerState.*;
+ import static java.time.Duration.ofSeconds;
+-import static java.util.Collections.emptyList;
+ import static org.awaitility.Awaitility.await;
+ import static org.junit.jupiter.api.Assertions.assertThrows;
+ import static org.mockito.ArgumentMatchers.any;
+@@ -92,7 +90,7 @@ class ProducerManagerTest {
+     private PCModuleTestEnv buildModule(ParallelConsumerOptions<String, String> opts) {
+         return new PCModuleTestEnv(opts) {
+             @Override
+-            protected AbstractParallelEoSStreamProcessor<String, String> pc() {
++            public AbstractParallelEoSStreamProcessor<String, String> pc() {
+                 if (parallelEoSStreamProcessor == null) {
+                     AbstractParallelEoSStreamProcessor<String, String> raw = super.pc();
+                     parallelEoSStreamProcessor = spy(raw);
+diff --git a/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/truth/ConsumerSubject.java b/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/truth/ConsumerSubject.java
+index 8a51c130..d5b85937 100644
+--- a/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/truth/ConsumerSubject.java
++++ b/parallel-consumer-core/src/test/java/io/confluent/parallelconsumer/truth/ConsumerSubject.java
+@@ -1,7 +1,7 @@
+ package io.confluent.parallelconsumer.truth;
+ 
+ /*-
+- * Copyright (C) 2020-2022 Confluent, Inc.
++ * Copyright (C) 2020-2024 Confluent, Inc.
+  */
+ 
+ import com.google.common.truth.FailureMetadata;
+@@ -16,7 +16,7 @@ import org.apache.kafka.common.TopicPartition;
+ import pl.tlinkowski.unij.api.UniLists;
+ import pl.tlinkowski.unij.api.UniSets;
+ 
+-import javax.annotation.Generated;
++import javax.annotation.processing.Generated;
+ import java.time.Duration;
+ import java.util.Map;
+ import java.util.Set;
+diff --git a/parallel-consumer-examples/parallel-consumer-example-core/pom.xml b/parallel-consumer-examples/parallel-consumer-example-core/pom.xml
+index acac31a3..6e03442a 100644
+--- a/parallel-consumer-examples/parallel-consumer-example-core/pom.xml
++++ b/parallel-consumer-examples/parallel-consumer-example-core/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-examples</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-example-core</artifactId>
+diff --git a/parallel-consumer-examples/parallel-consumer-example-metrics/pom.xml b/parallel-consumer-examples/parallel-consumer-example-metrics/pom.xml
+index 44a86dfa..457e73f6 100644
+--- a/parallel-consumer-examples/parallel-consumer-example-metrics/pom.xml
++++ b/parallel-consumer-examples/parallel-consumer-example-metrics/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-examples</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-example-metrics</artifactId>
+diff --git a/parallel-consumer-examples/parallel-consumer-example-reactor/pom.xml b/parallel-consumer-examples/parallel-consumer-example-reactor/pom.xml
+index e0e9716f..b9e1d544 100644
+--- a/parallel-consumer-examples/parallel-consumer-example-reactor/pom.xml
++++ b/parallel-consumer-examples/parallel-consumer-example-reactor/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-examples</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-example-reactor</artifactId>
+diff --git a/parallel-consumer-examples/parallel-consumer-example-streams/pom.xml b/parallel-consumer-examples/parallel-consumer-example-streams/pom.xml
+index 171b19f4..fdc770fd 100644
+--- a/parallel-consumer-examples/parallel-consumer-example-streams/pom.xml
++++ b/parallel-consumer-examples/parallel-consumer-example-streams/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-examples</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-example-streams</artifactId>
+diff --git a/parallel-consumer-examples/parallel-consumer-example-vertx/pom.xml b/parallel-consumer-examples/parallel-consumer-example-vertx/pom.xml
+index 5a2ea488..3aad0ef4 100644
+--- a/parallel-consumer-examples/parallel-consumer-example-vertx/pom.xml
++++ b/parallel-consumer-examples/parallel-consumer-example-vertx/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-examples</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-example-vertx</artifactId>
+diff --git a/parallel-consumer-examples/pom.xml b/parallel-consumer-examples/pom.xml
+index fc6969ad..d3bf57dd 100644
+--- a/parallel-consumer-examples/pom.xml
++++ b/parallel-consumer-examples/pom.xml
+@@ -10,7 +10,7 @@
+     <parent>
+         <artifactId>parallel-consumer-parent</artifactId>
+         <groupId>io.confluent.parallelconsumer</groupId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-examples</artifactId>
+diff --git a/parallel-consumer-reactor/pom.xml b/parallel-consumer-reactor/pom.xml
+index c6f71c94..bdfa97de 100644
+--- a/parallel-consumer-reactor/pom.xml
++++ b/parallel-consumer-reactor/pom.xml
+@@ -8,7 +8,7 @@
+     <parent>
+         <artifactId>parallel-consumer-parent</artifactId>
+         <groupId>io.confluent.parallelconsumer</groupId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+     <modelVersion>4.0.0</modelVersion>
+ 
+diff --git a/parallel-consumer-vertx/pom.xml b/parallel-consumer-vertx/pom.xml
+index bc7a34cf..4680ce07 100644
+--- a/parallel-consumer-vertx/pom.xml
++++ b/parallel-consumer-vertx/pom.xml
+@@ -8,7 +8,7 @@
+     <parent>
+         <groupId>io.confluent.parallelconsumer</groupId>
+         <artifactId>parallel-consumer-parent</artifactId>
+-        <version>0.5.2.8</version>
++        <version>0.5.2.8-rs</version>
+     </parent>
+ 
+     <artifactId>parallel-consumer-vertx</artifactId>
+diff --git a/pom.xml b/pom.xml
+index 5d2d4854..1335fd99 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -4,13 +4,14 @@
+     Copyright (C) 2020-2024 Confluent, Inc.
+ 
+ -->
+-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+ 
+     <groupId>io.confluent.parallelconsumer</groupId>
+     <artifactId>parallel-consumer-parent</artifactId>
+     <name>Confluent Parallel Consumer</name>
+-    <version>0.5.2.8</version>
++    <version>0.5.2.8-rs</version>
+     <description>Parallel Apache Kafka client wrapper with client side queueing, a simpler consumer/producer API with key concurrency and extendable non-blocking IO processing.
+     </description>
+     <url>https://confluent.io</url>
+@@ -55,7 +56,7 @@
+         <connection>scm:git:git://github.com:confluentinc/parallel-consumer.git</connection>
+         <developerConnection>scm:git:git@github.com:confluentinc/parallel-consumer.git</developerConnection>
+         <url>https://github.com/confluentinc/parallel-consumer.git</url>
+-        <tag>0.5.2.8</tag>
++        <tag>0.5.2.8-rs</tag>
+     </scm>
+ 
+     <distributionManagement>
+@@ -70,19 +71,19 @@
+     </distributionManagement>
+ 
+     <properties>
+-        <source.version>17</source.version>
+-        <release.target>8</release.target>
+-
++        <source.version>21</source.version>
++        <release.target>21</release.target>
++        <maven.compiler.source>21</maven.compiler.source>
++        <maven.compiler.target>21</maven.compiler.target>
++        <maven.toolchains.jdk-version>21</maven.toolchains.jdk-version>
+         <!-- when running mvn locally from cmd line, use default jvm for jvm8 - by default uses the runtime JVM -->
+         <jvm.location>${java.home}</jvm.location>
+-        <jvm8.location>-insert jvm8 location via environment variable-</jvm8.location>
+-        <jvm9.location>-insert jvm9 location via environment variable-</jvm9.location>
+         <!-- default to format when on developer machines, check when in CI -->
+         <license.mode>format</license.mode>
+         <delombok.output>${project.basedir}/target/delombok</delombok.output>
+ 
+         <!-- standard props -->
+-        <maven.version>3.6.3</maven.version>
++        <maven.version>3.9.6</maven.version>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+ 
+@@ -93,13 +94,12 @@
+         <!-- version numbers -->
+         <!-- plugins -->
+         <mycila.version>4.3</mycila.version>
+-        <lombok.version>1.18.28</lombok.version>
++        <lombok.version>1.18.30</lombok.version>
+         <auto-service.version>1.1.1</auto-service.version>
+         <surefire.version>3.2.5</surefire.version>
+ 
+         <!-- core -->
+-        <slf4j.version>2.0.7</slf4j.version>
+-        <kafka.version>3.5.0</kafka.version>
++        <kafka.version>3.6.0</kafka.version>
+         <version.unij>0.1.3</version.unij>
+ 
+         <!-- tests -->
+@@ -113,9 +113,10 @@
+         <flogger.version>0.8</flogger.version>
+         <mockito.version>5.10.0</mockito.version>
+         <truth-generator-maven-plugin.version>0.1.1</truth-generator-maven-plugin.version>
+-        <jabel.version>1.0.0</jabel.version>
+         <logback.version>1.4.14</logback.version>
+         <micrometer-core.version>1.12.2</micrometer-core.version>
++        <log4j.version>2.21.1</log4j.version>
++        <slf4j.version>1.7.36</slf4j.version>
+     </properties>
+ 
+     <profiles>
+@@ -147,21 +148,6 @@
+                 </plugins>
+             </build>
+         </profile>
+-        <profile>
+-            <!-- For releasing, use jvm8 for testing -->
+-            <!-- currently broken -->
+-            <id>jvm8-release</id>
+-            <properties>
+-                <jvm.location>${jvm8.location}</jvm.location>
+-            </properties>
+-        </profile>
+-        <profile>
+-            <!-- For releasing, use jvm9 for testing -->
+-            <id>jvm9-release</id>
+-            <properties>
+-                <jvm.location>${jvm9.location}</jvm.location>
+-            </properties>
+-        </profile>
+         <profile>
+             <id>license-format</id>
+             <activation>
+@@ -268,13 +254,6 @@
+     </profiles>
+ 
+     <dependencies>
+-        <!-- Build dependency -->
+-        <dependency>
+-            <groupId>com.github.bsideup.jabel</groupId>
+-            <artifactId>jabel-javac-plugin</artifactId>
+-            <version>${jabel.version}</version>
+-            <scope>provided</scope>
+-        </dependency>
+ 
+         <!-- Main -->
+         <dependency>
+@@ -283,11 +262,35 @@
+             <version>${lombok.version}</version>
+             <scope>provided</scope>
+         </dependency>
++        <dependency>
++            <!-- Use Log4J 2 API -->
++            <groupId>org.apache.logging.log4j</groupId>
++            <artifactId>log4j-api</artifactId>
++            <version>${log4j.version}</version>
++        </dependency>
++        <dependency>
++            <!-- Use Log4J 2 Core/Backend -->
++            <groupId>org.apache.logging.log4j</groupId>
++            <artifactId>log4j-core</artifactId>
++            <version>${log4j.version}</version>
++        </dependency>
++        <dependency>
++            <!-- Route SLF4J to Log4J 2 -->
++            <groupId>org.apache.logging.log4j</groupId>
++            <artifactId>log4j-slf4j-impl</artifactId>
++            <version>${log4j.version}</version>
++        </dependency>
+         <dependency>
+             <groupId>org.slf4j</groupId>
+             <artifactId>slf4j-api</artifactId>
+             <version>${slf4j.version}</version>
+         </dependency>
++        <dependency>
++            <!-- Route Log4J 1.x to SLF4J, which routes to Log4J 2 -->
++            <groupId>org.slf4j</groupId>
++            <artifactId>log4j-over-slf4j</artifactId>
++            <version>${slf4j.version}</version>
++        </dependency>
+         <dependency>
+             <groupId>pl.tlinkowski.unij</groupId>
+             <artifactId>pl.tlinkowski.unij.api</artifactId>
+@@ -450,7 +453,7 @@
+             <dependency>
+                 <groupId>com.google.guava</groupId>
+                 <artifactId>guava</artifactId>
+-                <version>32.1.1-jre</version>
++                <version>33.0.0-jre</version>
+             </dependency>
+             <dependency>
+                 <groupId>me.tongfei</groupId>
+@@ -612,6 +615,7 @@
+                             <excludes>
+                                 <exclude>**/release-pom.xml</exclude>
+                                 <exclude>**/target/**/*</exclude>
++                                <exclude>**/target-java21/**/*</exclude>
+                                 <exclude>**/README*</exclude>
+                                 <!-- don't think this is needed, as it's excluded by default. But running really slow on OSx so thought should check -->
+                                 <!-- https://github.com/mathieucarbou/license-maven-plugin/issues/298-->
+@@ -662,12 +666,6 @@
+                             <artifactId>lombok</artifactId>
+                             <version>${lombok.version}</version>
+                         </path>
+-                        <!-- jabel setup-->
+-                        <path>
+-                            <groupId>com.github.bsideup.jabel</groupId>
+-                            <artifactId>jabel-javac-plugin</artifactId>
+-                            <version>${jabel.version}</version>
+-                        </path>
+                     </annotationProcessorPaths>
+                     <!-- enable language preview features -->
+                     <source>${source.version}</source>
+@@ -753,10 +751,10 @@
+                                     <version>[${source.version},)</version>
+                                 </requireJavaVersion>
+                                 <requireMavenVersion>
+-                                    <version>3.6.3</version>
++                                    <version>3.9.6</version>
+                                 </requireMavenVersion>
+                                 <requireMavenVersion>
+-                                    <version>3.6.3</version>
++                                    <version>3.9.6</version>
+                                 </requireMavenVersion>
+                                 <bannedDependencies>
+                                     <searchTransitive>true</searchTransitive>
+@@ -764,15 +762,15 @@
+                                         <exclude>log4j:*:*:*:runtime</exclude>
+                                         <exclude>log4j:*:*:*:compile</exclude>
+                                         <exclude>log4j:*:*:*:test</exclude>
+-                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:runtime</exclude>
+-                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:compile</exclude>
++<!--                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:runtime</exclude>-->
++<!--                                        <exclude>org.apache.logging.log4j:log4j-core:*:*:compile</exclude>-->
+                                         <!-- Javafaker is abandoned and has CVEs and bugs -->
+                                         <exclude>com.github.javafaker</exclude>
+                                     </excludes>
+                                 </bannedDependencies>
+-                                <reactorModuleConvergence />
+-                                <banDuplicatePomDependencyVersions />
+-                                <requireSameVersions />
++                                <reactorModuleConvergence/>
++                                <banDuplicatePomDependencyVersions/>
++                                <requireSameVersions/>
+                             </rules>
+                         </configuration>
+                     </execution>
+@@ -836,28 +834,10 @@
+                 <artifactId>maven-project-info-reports-plugin</artifactId>
+                 <version>3.4.5</version>
+             </plugin>
+-            <plugin>
+-                <groupId>org.projectlombok</groupId>
+-                <artifactId>lombok-maven-plugin</artifactId>
+-                <version>1.18.20.0</version>
+-                <configuration>
+-                    <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+-                    <outputDirectory>${delombok.output}</outputDirectory>
+-                    <addOutputDirectory>false</addOutputDirectory>
+-                </configuration>
+-                <executions>
+-                    <execution>
+-                        <phase>generate-sources</phase>
+-                        <goals>
+-                            <goal>delombok</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-javadoc-plugin</artifactId>
+-                <version>3.5.0</version>
++                <version>3.6.0</version>
+                 <configuration>
+                     <sourcepath>${delombok.output}</sourcepath>
+                     <sourcepath>${delombok.output}</sourcepath>
+@@ -915,6 +895,9 @@
+                 <artifactId>versions-maven-plugin</artifactId>
+                 <version>2.16.2</version>
+             </plugin>
++            <plugin>
++                <artifactId>maven-toolchains-plugin</artifactId>
++            </plugin>
+         </plugins>
+ 
+         <!-- Management -->
+@@ -955,6 +938,26 @@
+                     <artifactId>maven-dependency-plugin</artifactId>
+                     <version>3.6.1</version>
+                 </plugin>
++                <plugin>
++                    <groupId>org.apache.maven.plugins</groupId>
++                    <artifactId>maven-toolchains-plugin</artifactId>
++                    <version>3.1.0</version>
++                    <executions>
++                        <execution>
++                            <id>toolchains-jdk</id>
++                            <goals>
++                                <goal>toolchain</goal>
++                            </goals>
++                        </execution>
++                    </executions>
++                    <configuration>
++                        <toolchains>
++                            <jdk>
++                                <version>${maven.toolchains.jdk-version}</version>
++                            </jdk>
++                        </toolchains>
++                    </configuration>
++                </plugin>
+             </plugins>
+         </pluginManagement>
+     </build>
+diff --git a/publish-snapshot.sh b/publish-snapshot.sh
+new file mode 100644
+index 00000000..c438fb22
+--- /dev/null
++++ b/publish-snapshot.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++
++RELEASE_TAG=snapshot
++
++git tag -d $RELEASE_TAG
++git push origin :refs/tags/$RELEASE_TAG
++
++git tag $RELEASE_TAG
++git push origin $RELEASE_TAG
+\ No newline at end of file
+diff --git a/service.yml b/service.yml
+index fb6390a8..8504382e 100644
+--- a/service.yml
++++ b/service.yml
+@@ -4,7 +4,7 @@
+ 
+ name: parallel-consumer
+ lang: java
+-lang_version: 17
++lang_version: 21
+ github:
+     enable: true
+     repo_name: confluentinc/parallel-consumer
+diff --git a/settings.xml b/settings.xml
+new file mode 100644
+index 00000000..4033a82a
+--- /dev/null
++++ b/settings.xml
+@@ -0,0 +1,64 @@
++<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
++          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
++                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
++
++    <activeProfiles>
++        <activeProfile>edgenettfs</activeProfile>
++    </activeProfiles>
++
++    <profiles>
++        <profile>
++            <id>edgenettfs</id>
++            <repositories>
++                <repository>
++                    <id>dp.internal</id>
++                    <url>https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1</url>
++                    <releases>
++                        <enabled>true</enabled>
++                    </releases>
++                    <snapshots>
++                        <enabled>true</enabled>
++                    </snapshots>
++                </repository>
++                <repository>
++                    <id>dp.sdk</id>
++                    <url>https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.sdk/maven/v1</url>
++                    <releases>
++                        <enabled>true</enabled>
++                    </releases>
++                    <snapshots>
++                        <enabled>true</enabled>
++                    </snapshots>
++                </repository>
++                <repository>
++                    <id>dp.thirdparty</id>
++                    <url>https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.thirdparty/maven/v1</url>
++                    <releases>
++                        <enabled>true</enabled>
++                    </releases>
++                    <snapshots>
++                        <enabled>false</enabled>
++                    </snapshots>
++                </repository>
++            </repositories>
++        </profile>
++    </profiles>
++
++    <servers>
++        <server>
++            <id>dp.sdk</id>
++            <username>edgenettfs</username>
++            <password>${env.EDS_BUILD_TOKEN}</password>
++        </server>
++        <server>
++            <id>dp.thirdparty</id>
++            <username>edgenettfs</username>
++            <password>${env.EDS_BUILD_TOKEN}</password>
++        </server>
++        <server>
++            <id>dp.internal</id>
++            <username>edgenettfs</username>
++            <password>${env.EDS_BUILD_TOKEN}</password>
++        </server>
++    </servers>
++</settings>
+\ No newline at end of file

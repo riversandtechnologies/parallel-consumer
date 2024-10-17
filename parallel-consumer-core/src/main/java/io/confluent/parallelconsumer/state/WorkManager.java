@@ -1,9 +1,11 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
+import com.google.common.collect.LinkedListMultimap;
+import com.google.common.collect.ListMultimap;
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.internal.*;
 import io.confluent.parallelconsumer.metrics.PCMetrics;
@@ -12,11 +14,11 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Tag;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import pl.tlinkowski.unij.api.UniLists;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.*;
@@ -39,8 +41,8 @@ import static lombok.AccessLevel.PUBLIC;
  *
  * @author Antony Stubbs
  */
-@Slf4j
 public class WorkManager<K, V> implements ConsumerRebalanceListener {
+    private static final Logger log = LogManager.getLogger(WorkManager.class);
 
     @Getter
     private final ParallelConsumerOptions<K, V> options;
@@ -131,16 +133,23 @@ public class WorkManager<K, V> implements ConsumerRebalanceListener {
      * Get work with no limit on quantity, useful for testing.
      */
     public List<WorkContainer<K, V>> getWorkIfAvailable() {
-        return getWorkIfAvailable(Integer.MAX_VALUE);
+        return getWorkIfAvailableInternal(Integer.MAX_VALUE).values().stream().toList();
     }
 
     /**
      * Depth first work retrieval.
      */
     public List<WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
+        return getWorkIfAvailableInternal(requestedMaxWorkToRetrieve).values().stream().toList();
+    }
+
+    /**
+     * Depth first work retrieval.
+     */
+    public ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailableInternal(final int requestedMaxWorkToRetrieve) {
         // optimise early
         if (requestedMaxWorkToRetrieve < 1) {
-            return UniLists.of();
+            return LinkedListMultimap.create(0);
         }
 
         //

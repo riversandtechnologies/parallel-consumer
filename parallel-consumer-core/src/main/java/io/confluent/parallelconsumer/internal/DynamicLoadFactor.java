@@ -5,7 +5,8 @@ package io.confluent.parallelconsumer.internal;
  */
 
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -18,8 +19,8 @@ import java.time.Instant;
  * ({@link #isNotCoolingDown()})  and b) too soon after starting the system ({@link #isWarmUpPeriodOver()}).
  */
 // todo make so can be fractional like 50% - this is because some systems need a fractional factor, like 1.1 or 1.2 rather than 2
-@Slf4j
 public class DynamicLoadFactor {
+    private static final Logger log = LogManager.getLogger(DynamicLoadFactor.class);
 
     /**
      * Don't change this unless you know what you're doing.
