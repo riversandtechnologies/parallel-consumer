@@ -206,7 +206,7 @@ public class ShardManager<K, V> {
         // If using KEY ordering, where the shard key is a message key, garbage collect old shard keys (i.e. KEY ordering we may never see a message for this key again)
         // If not, no point to remove the shard, as it will be reused for the next message from the same partition
         boolean keyOrdering = options.getOrdering().equals(KEY) || options.getOrdering().equals(KEY_EXCLUSIVE) ||
-                options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || options.getOrdering().equals(KEY_GROUP_EXCLUSIVE);
+                options.getOrdering().equals(KEY_BATCH_EXCLUSIVE);
         if (keyOrdering && shardOpt.isPresent() && shardOpt.get().isEmpty()) {
             log.trace("Removing empty shard (key: {})", key);
             this.processingShards.remove(key);

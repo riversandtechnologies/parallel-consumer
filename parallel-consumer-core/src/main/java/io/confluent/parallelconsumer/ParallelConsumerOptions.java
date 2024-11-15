@@ -133,13 +133,7 @@ public class ParallelConsumerOptions<K, V> {
          * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
          * conflicts
          */
-        KEY_BATCH_EXCLUSIVE,
-
-        /**
-         * Process messages in key order across topic group. Concurrency is at most the number of unique keys in a
-         * topic, limited by the max concurrency or uncommitted settings.
-         */
-        KEY_GROUP_EXCLUSIVE
+        KEY_BATCH_EXCLUSIVE
     }
 
     /**
@@ -417,21 +411,20 @@ public class ParallelConsumerOptions<K, V> {
 
     /**
      * Controls how long for Kafka consumer.poll() to be retried upon SaslAuthenticationException.
-     *
+     * <p>
      * Occasionally, consumer.poll() throws SaslAuthenticationException due to temporary external system failures.
-     *
-     * In this case, consumers are stopped immediately. It is actually retryable.
-     * This timeout is zero by default, meaning no retry will be performed.
-     * When set to a duration that is larger than 0, the consumer.poll() will ignore SaslAuthenticationException and continue retrying
-     * until this timeout is elaposed.
+     * <p>
+     * In this case, consumers are stopped immediately. It is actually retryable. This timeout is zero by default,
+     * meaning no retry will be performed. When set to a duration that is larger than 0, the consumer.poll() will ignore
+     * SaslAuthenticationException and continue retrying until this timeout is elaposed.
      */
     @Builder.Default
     private final Duration saslAuthenticationRetryTimeout = Duration.ofSeconds(0);
 
     /**
-     * Controls when SaslAuthenticationException is encountered, how long to backoff before next try.
-     * The backoff still watches the shutdownRequest every 100ms and will exit as soon as (within 100ms)
-     * the shutdown request had been received.
+     * Controls when SaslAuthenticationException is encountered, how long to backoff before next try. The backoff still
+     * watches the shutdownRequest every 100ms and will exit as soon as (within 100ms) the shutdown request had been
+     * received.
      */
     @Builder.Default
     private final Duration saslAuthenticationExceptionRetryBackoff = SASL_AUTHENTICATION_EXCEPTION_RETRY_BACKOFF;
