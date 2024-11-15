@@ -133,7 +133,13 @@ public class ParallelConsumerOptions<K, V> {
          * limited by the max concurrency or uncommitted settings. Only 1 batch with same keys is in transit to avoid
          * conflicts
          */
-        KEY_BATCH_EXCLUSIVE
+        KEY_BATCH_EXCLUSIVE,
+
+        /**
+         * Process messages in key order across topic group. Concurrency is at most the number of unique keys in a
+         * topic, limited by the max concurrency or uncommitted settings.
+         */
+        KEY_GROUP_EXCLUSIVE
     }
 
     /**
