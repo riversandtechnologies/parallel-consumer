@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.KafkaUtils;
@@ -10,9 +10,10 @@ import io.confluent.parallelconsumer.internal.EpochAndRecordsMap;
 import io.confluent.parallelconsumer.internal.PCModule;
 import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Optional;
 import java.util.SortedSet;
@@ -33,8 +34,8 @@ import java.util.TreeSet;
  *
  * @author Antony Stubbs
  */
-@Slf4j
 public class RemovedPartitionState<K, V> extends PartitionState<K, V> {
+    private static final Logger log = LogManager.getLogger(RemovedPartitionState.class);
 
     private static final SortedSet<Long> READ_ONLY_EMPTY_SET = new TreeSet<>();
 

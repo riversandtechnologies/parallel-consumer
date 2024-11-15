@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.MathUtils;
@@ -10,7 +10,8 @@ import io.confluent.parallelconsumer.internal.InternalRuntimeException;
 import io.confluent.parallelconsumer.state.PartitionState;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -42,8 +43,8 @@ import static io.confluent.parallelconsumer.offsets.OffsetEncoding.*;
  * @see OffsetBitSet
  */
 @ToString(callSuper = true)
-@Slf4j
 public class BitSetEncoder extends OffsetEncoder {
+    private static final Logger log = LogManager.getLogger(BitSetEncoder.class);
 
     private static final Version DEFAULT_VERSION = Version.v2;
 

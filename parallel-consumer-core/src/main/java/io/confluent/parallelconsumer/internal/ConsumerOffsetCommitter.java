@@ -8,10 +8,11 @@ import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode;
 import io.confluent.parallelconsumer.state.WorkManager;
 import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.Map;
@@ -28,8 +29,8 @@ import static io.confluent.parallelconsumer.ParallelConsumerOptions.CommitMode.P
  *
  * @see CommitMode
  */
-@Slf4j
 public class ConsumerOffsetCommitter<K, V> extends AbstractOffsetCommitter<K, V> implements OffsetCommitter {
+    private static final Logger log = LogManager.getLogger(ConsumerOffsetCommitter.class);
 
     /**
      * Chosen arbitrarily - retries should never be needed, if they are it's an invalid state

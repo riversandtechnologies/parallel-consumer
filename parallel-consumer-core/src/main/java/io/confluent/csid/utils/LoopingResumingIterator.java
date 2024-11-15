@@ -1,11 +1,12 @@
 package io.confluent.csid.utils;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -24,8 +25,9 @@ import java.util.Optional;
  *
  * @author Antony Stubbs
  */
-@Slf4j
+
 public class LoopingResumingIterator<KEY, VALUE> {
+    private static final Logger log = LogManager.getLogger(LoopingResumingIterator.class);
 
     private Optional<Map.Entry<KEY, VALUE>> head = Optional.empty();
 

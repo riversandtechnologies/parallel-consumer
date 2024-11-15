@@ -1,22 +1,24 @@
 package io.confluent.csid.utils;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import lombok.Builder;
 import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.experimental.UtilityClass;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 
-@Slf4j
+
 @UtilityClass
 public class TimeUtils {
+    private static final Logger log = LogManager.getLogger(TimeUtils.class);
 
     public Clock getClock() {
         return Clock.systemUTC();

@@ -1,22 +1,23 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.state.WorkManager;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-@Slf4j
 @RequiredArgsConstructor
 public abstract class AbstractOffsetCommitter<K, V> implements OffsetCommitter {
+    private static final Logger log = LogManager.getLogger(AbstractOffsetCommitter.class);
 
     protected final ConsumerManager<K, V> consumerMgr;
     protected final WorkManager<K, V> wm;

@@ -1,12 +1,13 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager.HighestOffsetAndIncompletes;
 import lombok.experimental.UtilityClass;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -24,9 +25,9 @@ import java.util.function.Supplier;
  *
  * @author Antony Stubbs
  */
-@Slf4j
 @UtilityClass
 public class OffsetRunLength {
+    private static final Logger log = LogManager.getLogger(OffsetRunLength.class);
 
     /**
      * @return run length encoding, always starting with an 'o' count

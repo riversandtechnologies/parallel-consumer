@@ -13,7 +13,7 @@ NOTE:: Dependency version bumps are not listed here.
 ifndef::github_name[]
 toc::[]
 endif::[]
-== 0.5.3.2
+== 0.5.3.2.1-rs
 
 === Fixes
 
@@ -24,7 +24,7 @@ endif::[]
 === Note
 #836 introduces a change in how buffer size is calculated as now inflight messages are counted as part of buffer size - so behaviour of existing applications may change and pausing of consumer happen sooner.
 
-== 0.5.3.1
+== 0.5.3.1-rs
 
 === Fixes
 

@@ -1,13 +1,14 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.PollContextInternal;
 import io.confluent.parallelconsumer.state.WorkContainer;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -17,8 +18,8 @@ import static io.confluent.csid.utils.StringUtils.msg;
 /**
  * Overrides key aspects required in common for other threading engines like Vert.x and Reactor
  */
-@Slf4j
 public abstract class ExternalEngine<K, V> extends AbstractParallelEoSStreamProcessor<K, V> {
+    private static final Logger log = LogManager.getLogger(ExternalEngine.class);
 
     protected ExternalEngine(final ParallelConsumerOptions<K, V> newOptions) {
         super(newOptions);

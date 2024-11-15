@@ -1,15 +1,16 @@
 package io.confluent.parallelconsumer.metrics;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
-import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
 import io.micrometer.core.instrument.search.Search;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,8 +21,8 @@ import static java.util.Collections.singleton;
 /**
  * Main metrics collection and initialization service. Singleton - makes it easier to add metrics throughout the code
  */
-@Slf4j
 public class PCMetrics {
+    private static final Logger log = LogManager.getLogger(PCMetrics.class);
 
     /**
      * Meter registry used for metrics - set through init call on singleton initialization. Configurable through

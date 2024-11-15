@@ -1,12 +1,13 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.internal.InternalRuntimeException;
 import io.confluent.parallelconsumer.offsets.OffsetMapCodecManager.HighestOffsetAndIncompletes;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.BitSet;
@@ -23,8 +24,8 @@ import static io.confluent.csid.utils.Range.range;
  * @author Antony Stubbs
  * @see BitSetEncoder
  */
-@Slf4j
 public class OffsetBitSet {
+    private static final Logger log = LogManager.getLogger(OffsetBitSet.class);
 
     static String deserialiseBitSetWrap(ByteBuffer wrap, OffsetEncoding.Version version) {
         wrap.rewind();

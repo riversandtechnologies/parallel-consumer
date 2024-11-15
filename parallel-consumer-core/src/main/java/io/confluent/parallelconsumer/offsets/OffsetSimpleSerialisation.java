@@ -1,14 +1,16 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
+
 import com.github.luben.zstd.ZstdInputStream;
 import com.github.luben.zstd.ZstdOutputStream;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
 
@@ -28,8 +30,8 @@ import static io.confluent.csid.utils.BackportUtils.readFully;
  * @author Antony Stubbs
  */
 @UtilityClass
-@Slf4j
 public class OffsetSimpleSerialisation {
+    private static final Logger log = LogManager.getLogger(OffsetSimpleSerialisation.class);
 
     @SneakyThrows
     static String encodeAsJavaObjectStream(final Set<Long> incompleteOffsets) {
