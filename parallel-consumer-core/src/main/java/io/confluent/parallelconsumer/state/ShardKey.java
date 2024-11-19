@@ -36,7 +36,6 @@ public class ShardKey {
         return switch (ordering) {
             case KEY_BATCH_EXCLUSIVE -> ofKeyBatchExclusive(rec);
             case KEY_EXCLUSIVE -> ofKeyExclusive(rec);
-            case KEY_GROUP_EXCLUSIVE -> ofKeyGroupExclusive(rec);
             case KEY -> ofKey(rec);
             case PARTITION, UNORDERED -> ofTopicPartition(rec);
         };
@@ -50,16 +49,30 @@ public class ShardKey {
         return new KeyExclusiveOrderedKey(rec);
     }
 
-    public static KeyGroupExclusiveOrderedKey ofKeyGroupExclusive(ConsumerRecord<?, ?> rec) {
-        return new KeyGroupExclusiveOrderedKey(rec);
-    }
-
     public static KeyOrderedKey ofKey(ConsumerRecord<?, ?> rec) {
         return new KeyOrderedKey(rec);
     }
 
     public static ShardKey ofTopicPartition(final ConsumerRecord<?, ?> rec) {
         return new TopicPartitionKey(new TopicPartition(rec.topic(), rec.partition()));
+    }
+
+    static String getTopicGroup(String topic) {
+        String topicGroup = TOPIC_GROUP_MAP.get(topic);
+        if (Strings.isNullOrEmpty(topicGroup)) {
+            if (topic.contains("-")) {
+                String[] delimitedTopic = topic.split("-");
+                if (delimitedTopic.length >= 2) {
+                    topicGroup = delimitedTopic[delimitedTopic.length - 1];
+                    TOPIC_GROUP_MAP.put(topic, topicGroup);
+                }
+            }
+
+            if (Strings.isNullOrEmpty(topicGroup)) {
+                topicGroup = "default";
+            }
+        }
+        return topicGroup;
     }
 
     @Value
@@ -78,22 +91,7 @@ public class ShardKey {
         }
 
         public KeyBatchExclusiveOrderedKey(final String topic, final Object key) {
-            String topicGroup = TOPIC_GROUP_MAP.get(topic);
-            if (Strings.isNullOrEmpty(topicGroup)) {
-                if (topic.contains("-")) {
-                    String[] delimitedTopic = topic.split("-");
-                    if (delimitedTopic.length >= 2) {
-                        topicGroup = delimitedTopic[delimitedTopic.length - 1];
-                        TOPIC_GROUP_MAP.put(topic, topicGroup);
-                    }
-                }
-
-                if (Strings.isNullOrEmpty(topicGroup)) {
-                    topicGroup = "default";
-                }
-            }
-
-            this.topicGroup = topicGroup;
+            this.topicGroup = getTopicGroup(topic);
             if (key instanceof KeyWithEquals) {
                 this.key = (KeyWithEquals) key;
             } else {
@@ -106,57 +104,18 @@ public class ShardKey {
     @RequiredArgsConstructor
     @EqualsAndHashCode(callSuper = true)
     public static class KeyExclusiveOrderedKey extends ShardKey {
-
-        /**
-         * The key of the record being referenced. Nullable if record is produced with a null key.
-         */
-        KeyWithEquals key;
-
-        public KeyExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
-            this(rec.key());
-        }
-
-        public KeyExclusiveOrderedKey(final Object key) {
-            if (key instanceof KeyWithEquals) {
-                this.key = (KeyWithEquals) key;
-            } else {
-                this.key = new KeyWithEquals(key);
-            }
-        }
-    }
-
-    @Value
-    @RequiredArgsConstructor
-    @EqualsAndHashCode(callSuper = true)
-    public static class KeyGroupExclusiveOrderedKey extends ShardKey {
-
         String topicGroup;
         /**
          * The key of the record being referenced. Nullable if record is produced with a null key.
          */
         KeyWithEquals key;
 
-        public KeyGroupExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
+        public KeyExclusiveOrderedKey(final ConsumerRecord<?, ?> rec) {
             this(rec.topic(), rec.key());
         }
 
-        public KeyGroupExclusiveOrderedKey(final String topic, final Object key) {
-            String topicGroup = TOPIC_GROUP_MAP.get(topic);
-            if (Strings.isNullOrEmpty(topicGroup)) {
-                if (topic.contains("-")) {
-                    String[] delimitedTopic = topic.split("-");
-                    if (delimitedTopic.length >= 2) {
-                        topicGroup = delimitedTopic[delimitedTopic.length - 1];
-                        TOPIC_GROUP_MAP.put(topic, topicGroup);
-                    }
-                }
-
-                if (Strings.isNullOrEmpty(topicGroup)) {
-                    topicGroup = "default";
-                }
-            }
-
-            this.topicGroup = topicGroup;
+        public KeyExclusiveOrderedKey(final String topic, final Object key) {
+            this.topicGroup = getTopicGroup(topic);
             if (key instanceof KeyWithEquals) {
                 this.key = (KeyWithEquals) key;
             } else {

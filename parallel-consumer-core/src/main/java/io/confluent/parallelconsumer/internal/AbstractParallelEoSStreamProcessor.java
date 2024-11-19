@@ -81,6 +81,8 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
     @Getter
     private ActionListeners<K, V> actionListeners;
 
+    private PartitionBatchStrategy<K, V> partitionBatchStrategy;
+
     /**
      * Injectable clock for testing
      */
@@ -1069,75 +1071,32 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
         }
     }
 
-    private List<List<WorkContainer<K, V>>> makeBatches(ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
+    private <K, V> List<List<WorkContainer<K, V>>> makeBatches(ListMultimap<ShardKey, WorkContainer<K, V>> workToProcess) {
+        if (this.partitionBatchStrategy != null) {
+            return this.partitionBatchStrategy.partitionBatch(workToProcess);
+        }
         int maxBatchSize = options.getBatchSize();
-        long maxBatchBytes = options.getBatchBytes();
-        return partition(workToProcess, maxBatchSize, maxBatchBytes);
+        return partition(workToProcess.values(), maxBatchSize);
     }
 
-    private <K, V> List<List<WorkContainer<K, V>>> partition(ListMultimap<ShardKey, WorkContainer<K, V>> sourceCollection, int maxBatchSize, final long maxBatchBytes) {
-        List<List<WorkContainer<K, V>>> listOfBatches = new ArrayList<>();
-        List<WorkContainer<K, V>> batchInConstruction = new ArrayList<>();
-        //
-        if (options.getOrdering().equals(ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE) && maxBatchSize > 1) {
-            Map<ShardKey, List<WorkContainer<K, V>>> shardKeyListMap = new HashMap<>();
-            Map<ShardKey, Integer> keyCounts = new HashMap<>();
-            for (final ShardKey shardKey : sourceCollection.keySet()) {
-                keyCounts.put(shardKey, sourceCollection.get(shardKey).size());
-                shardKeyListMap.put(shardKey, sourceCollection.get(shardKey));
-            }
-            while (!keyCounts.isEmpty()) {
-                Iterator<Map.Entry<ShardKey, Integer>> entryIterator = keyCounts.entrySet().iterator();
-                boolean added = false;
-                while (entryIterator.hasNext()) {
-                    Map.Entry<ShardKey, Integer> entry = entryIterator.next();
-                    int keyCount = entry.getValue();
-                    if (batchInConstruction.size() >= maxBatchSize) {
-                        listOfBatches.add(batchInConstruction);
-                        batchInConstruction = new ArrayList<>();
-                        added = false;
-                    }
-                    if (keyCount >= maxBatchSize) {
-                        listOfBatches.add(shardKeyListMap.get(entry.getKey()));
-                        entryIterator.remove();
-                    } else if ((batchInConstruction.size() + keyCount) <= maxBatchSize) {
-                        batchInConstruction.addAll(shardKeyListMap.get(entry.getKey()));
-                        entryIterator.remove();
-                        added = true;
-                    }
-                }
-                if (!added && !batchInConstruction.isEmpty()) {
-                    listOfBatches.add(batchInConstruction);
-                    batchInConstruction = new ArrayList<>();
-                }
-            }
-            // add partial tail
-            if (!batchInConstruction.isEmpty()) {
-                listOfBatches.add(batchInConstruction);
-            }
-        } else {
-            long batchBytes = 0;
-            for (final WorkContainer<K, V> toProcess : sourceCollection.values()) {
-                long crsize = toProcess.getCr().serializedValueSize() + toProcess.getCr().serializedKeySize();
-                batchBytes += crsize;
-                if (batchBytes >= maxBatchBytes && !batchInConstruction.isEmpty()) {
-                    listOfBatches.add(batchInConstruction);
-                    batchInConstruction = new ArrayList<>();
-                    batchBytes = crsize;
-                }
-                batchInConstruction.add(toProcess);
+    private static <T> List<List<T>> partition(Collection<T> sourceCollection, int maxBatchSize) {
+        List<List<T>> listOfBatches = new ArrayList<>();
+        List<T> batchInConstruction = new ArrayList<>();
 
-                //
-                if (batchInConstruction.size() >= maxBatchSize) {
-                    listOfBatches.add(batchInConstruction);
-                    batchInConstruction = new ArrayList<>();
-                    batchBytes = 0;
-                }
-            }
-            // add partial tail
-            if (!batchInConstruction.isEmpty()) {
+        //
+        for (T item : sourceCollection) {
+            batchInConstruction.add(item);
+
+            //
+            if (batchInConstruction.size() == maxBatchSize) {
                 listOfBatches.add(batchInConstruction);
+                batchInConstruction = new ArrayList<>();
             }
+        }
+
+        // add partial tail
+        if (!batchInConstruction.isEmpty()) {
+            listOfBatches.add(batchInConstruction);
         }
 
         if (log.isDebugEnabled()) {
@@ -1607,5 +1566,10 @@ public abstract class AbstractParallelEoSStreamProcessor<K, V> implements Parall
 
     public void registerActionListener(final ActionListener<K, V> actionListener) {
         actionListeners.registerListener(actionListener);
+    }
+
+    public void registerPartitionBatchStrategy(final PartitionBatchStrategy<K, V> partitionBatchStrategy) {
+        this.partitionBatchStrategy = partitionBatchStrategy;
+        this.partitionBatchStrategy.setOptions(getOptions());
     }
 }

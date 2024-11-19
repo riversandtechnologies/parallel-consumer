@@ -151,7 +151,6 @@ public class ProcessingShard<K, V> {
         int keyBatchSize = 0;
         while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
             var workContainer = iterator.next().getValue();
-
             if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
                 if (pm.couldBeTakenAsWork(workContainer)) {
                     if (workContainer.isAvailableToTakeAsWork()) {
@@ -174,7 +173,7 @@ public class ProcessingShard<K, V> {
                         addToSlowWorkMaybe(slowWork, workContainer);
                     }
 
-                    if (isOrderRestricted()) {
+                    if (isOrderRestricted() && isOrderSingular()) {
                         // can't take any more work from this shard, due to ordering restrictions
                         // processing blocked on this shard, continue to next shard
                         log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
@@ -250,7 +249,11 @@ public class ProcessingShard<K, V> {
     }
 
     private boolean isOrderRestricted() {
-        return !(options.getOrdering().equals(UNORDERED) || options.getOrdering().equals(KEY_BATCH_EXCLUSIVE));
+        return !options.getOrdering().equals(UNORDERED);
+    }
+
+    private boolean isOrderSingular() {
+        return !options.getOrdering().equals(KEY_BATCH_EXCLUSIVE);
     }
 
     // check if the work container is stale
