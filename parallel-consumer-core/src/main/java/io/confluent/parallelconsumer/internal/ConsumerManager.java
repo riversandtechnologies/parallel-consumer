@@ -115,14 +115,14 @@ public class ConsumerManager<K, V> {
                     tryCount++;
                     try {
                         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = new HashMap<>();
-                        consumerRecords = actionListeners.pollFromBuffer(records);
-                        if (consumerRecords == null || consumerRecords.isEmpty()) {
-                            partitionRecords = consumer.poll(timeoutToUse);
-                            for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
-                                records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
-                            }
-                            consumerRecords = actionListeners.afterPoll(records);
+//                        consumerRecords = actionListeners.pollFromBuffer(records);
+//                        if (consumerRecords == null || consumerRecords.isEmpty()) {
+                        partitionRecords = consumer.poll(timeoutToUse);
+                        for (final TopicPartition pollTopicPartition : partitionRecords.partitions()) {
+                            records.put(pollTopicPartition, new ArrayList<>(partitionRecords.records(pollTopicPartition)));
                         }
+                        consumerRecords = actionListeners.afterPoll(records);
+//                        }
                         consumer.resume(pausedPartitions);
                         polledSuccessfully = true;
                         break;
