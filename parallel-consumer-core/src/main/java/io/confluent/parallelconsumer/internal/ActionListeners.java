@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2025 Confluent, Inc.
+ * Copyright (C) 2020-2024 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ActionListener;
@@ -20,7 +20,6 @@ public class ActionListeners<K, V> {
     private final Consumer<K, V> consumer;
     @Getter
     private boolean isPausing;
-    private int skipPollCounter = 0;
 
     public ActionListeners(Consumer<K, V> consumer) {
         this.consumer = consumer;
@@ -65,18 +64,6 @@ public class ActionListeners<K, V> {
             isPausing = true;
         }
         return allPausedPartitions;
-    }
-
-    public ConsumerRecords<K, V> pollFromBuffer(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
-        if (skipPollCounter < 5) {
-            final ConsumerRecords<K, V> consumerRecords = afterPoll(records);
-            if (!consumerRecords.isEmpty()) {
-                skipPollCounter++;
-                return consumerRecords;
-            }
-        }
-        skipPollCounter = 0;
-        return null;
     }
 
     public ConsumerRecords<K, V> afterPoll(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
