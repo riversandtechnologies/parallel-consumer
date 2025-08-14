@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.state;
 
 /*-
- * Copyright (C) 2020-2024 Confluent, Inc.
+ * Copyright (C) 2020-2025 Confluent, Inc.
  */
 
 import com.google.common.collect.LinkedListMultimap;
@@ -26,8 +26,7 @@ import java.util.stream.Collectors;
 import static io.confluent.csid.utils.BackportUtils.toSeconds;
 import static io.confluent.csid.utils.JavaUtils.isGreaterThan;
 import static io.confluent.csid.utils.StringUtils.msg;
-import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY_BATCH_EXCLUSIVE;
-import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.UNORDERED;
+import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.*;
 import static lombok.AccessLevel.PRIVATE;
 
 /**
@@ -149,36 +148,39 @@ public class ProcessingShard<K, V> {
 
         var iterator = entries.entrySet().iterator();
         int keyBatchSize = 0;
-        while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
+        var keyBatchBytes = 0;
+        long keyWCInFlight = getCountWorkInFlight();
+
+        while (keyBatchSize < workToGetDelta && iterator.hasNext()) {
             var workContainer = iterator.next().getValue();
             if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
                 if (pm.couldBeTakenAsWork(workContainer)) {
                     if (workContainer.isAvailableToTakeAsWork()) {
-                        if (!options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize < 1 && getCountWorkInFlight() < 1)) {
-                            log.trace("Taking {} as work", workContainer);
-                            workContainer.onQueueingForExecution();
-                            workTaken.put(key, workContainer);
-                            keyBatchSize++;
-                        } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) &&
-                                (keyBatchSize < options.getBatchSize() && getCountWorkInFlight() < options.getBatchSize())) {
-                            log.trace("Taking {} as work", workContainer);
-                            workContainer.onQueueingForExecution();
-                            workTaken.put(key, workContainer);
-                            keyBatchSize++;
-                        } else {
-                            break;
+                        if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || options.getOrdering().equals(KEY_EXCLUSIVE)) {
+                            if (keyWCInFlight >= 1) {
+                                // if KEY_BATCH_EXCLUSIVE, then we can only take one key's worth of work at a time
+                                log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                                break;
+                            }
                         }
+
+                        log.trace("Taking {} as work", workContainer);
+                        workContainer.onQueueingForExecution();
+                        workTaken.put(key, workContainer);
+                        keyBatchSize++;
+                        keyBatchBytes += workContainer.getCr().serializedValueSize();
                     } else {
                         log.trace("Skipping {} as work, not available to take as work", workContainer);
                         addToSlowWorkMaybe(slowWork, workContainer);
                     }
 
-                    if (isOrderRestricted() && isOrderSingular()) {
-                        // can't take any more work from this shard, due to ordering restrictions
-                        // processing blocked on this shard, continue to next shard
-                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
-                        break;
-                    } else if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) && (keyBatchSize >= options.getBatchSize())) {
+                    if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE)) {
+                        if (keyWCInFlight >= 1 || (keyBatchSize >= options.getBatchSize() || keyBatchBytes >= options.getBatchBytes())) {
+                            // if KEY_BATCH_EXCLUSIVE, then we can only take one key batch worth of work at a time
+                            log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                            break;
+                        }
+                    } else if (isOrderRestricted()) {
                         // can't take any more work from this shard, due to ordering restrictions
                         // processing blocked on this shard, continue to next shard
                         log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
@@ -199,8 +201,8 @@ public class ProcessingShard<K, V> {
             }
         }
 
-        if (workTaken.size() == workToGetDelta) {
-            log.trace("Work taken ({}) exceeds max ({})", workTaken.size(), workToGetDelta);
+        if (keyBatchSize >= workToGetDelta) {
+            log.trace("Work taken ({}) exceeds max ({})", keyBatchSize, workToGetDelta);
         }
 
         logSlowWork(slowWork);
@@ -208,7 +210,7 @@ public class ProcessingShard<K, V> {
         // Remove from retry queue as picked for submission to work pool - filter to only remove work containers that have
         // previously failed - as retry queue won't have any that didn't previously fail.
         retryQueue.removeAll(workTaken.values().stream().filter(WorkContainer::hasPreviouslyFailed).collect(Collectors.toList()));
-        dcrAvailableWorkContainerCntByDelta(workTaken.size());
+        dcrAvailableWorkContainerCntByDelta(keyBatchSize);
 
         return workTaken;
     }
@@ -250,10 +252,6 @@ public class ProcessingShard<K, V> {
 
     private boolean isOrderRestricted() {
         return !options.getOrdering().equals(UNORDERED);
-    }
-
-    private boolean isOrderSingular() {
-        return !options.getOrdering().equals(KEY_BATCH_EXCLUSIVE);
     }
 
     // check if the work container is stale
