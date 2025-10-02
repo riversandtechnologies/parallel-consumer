@@ -6,7 +6,7 @@ Releases are automated through a Semaphore Task and are always built from latest
 - Verify that Changelog.md and Readme.md are up-to-date with all the changes in the release. If not update them through normal PR process.
 - Go to Tasks in Parallel Consumer project on Semaphore CI - https://semaphore.ci.confluent.io/projects/parallel-consumer/schedulers
 - Click on Run Now for the Release task
-- Enter Release Version (e.g. 0.5.3.3)
+- Enter Release Version (e.g. 0.5.3.3-rs)
 - Enter Next Development Version (e.g. 0.5.3.4-SNAPSHOT)
 - Click Run the Task
 - The task will create a Tag branch and corresponding Semaphore Job will start automatically
@@ -40,4 +40,4 @@ In case of actual upload failure / build failure of the tagged branch - the tag 
 
 `delete-github-tag` in https://semaphore.ci.confluent.io/projects/github-tasks/schedulers.
 
-This will delete the tag (actually it will rename the tag to TAG-DELETED - i.e. 0.5.3.3-deleted) so that whatever build issue there is can be remedied (with revert / new PRs to Master branch) and when ready to do a release again - you can follow this process again.
+This will delete the tag (actually it will rename the tag to TAG-DELETED - i.e. 0.5.3.3-rs-deleted) so that whatever build issue there is can be remedied (with revert / new PRs to Master branch) and when ready to do a release again - you can follow this process again.

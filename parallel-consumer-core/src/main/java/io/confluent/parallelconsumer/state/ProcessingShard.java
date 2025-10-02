@@ -4,12 +4,17 @@ package io.confluent.parallelconsumer.state;
  * Copyright (C) 2020-2025 Confluent, Inc.
  */
 
+import com.google.common.collect.LinkedListMultimap;
+import com.google.common.collect.ListMultimap;
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder;
+import io.confluent.parallelconsumer.internal.ActionListeners;
 import io.confluent.parallelconsumer.internal.RateLimiter;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
 import java.util.*;
@@ -20,7 +25,7 @@ import java.util.stream.Collectors;
 import static io.confluent.csid.utils.BackportUtils.toSeconds;
 import static io.confluent.csid.utils.JavaUtils.isGreaterThan;
 import static io.confluent.csid.utils.StringUtils.msg;
-import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.UNORDERED;
+import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.*;
 import static lombok.AccessLevel.PRIVATE;
 
 /**
@@ -43,7 +48,7 @@ public class ProcessingShard<K, V> {
      * mode).
      */
     @Getter
-    private final NavigableMap<Long, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
+    private final NavigableMap<String, WorkContainer<K, V>> entries = new ConcurrentSkipListMap<>();
 
 
     @Getter(PRIVATE)
@@ -57,8 +62,16 @@ public class ProcessingShard<K, V> {
 
     private final AtomicLong availableWorkContainerCnt = new AtomicLong(0);
 
+    private String getWcKey(WorkContainer<K, V> wc) {
+        return wc.getTopicPartition() + "-" + wc.offset();
+    }
+
+    private String getWcKey(ConsumerRecord<K, V> cr) {
+        return new TopicPartition(cr.topic(), cr.partition()) + "-" + cr.offset();
+    }
+
     public void addWorkContainer(WorkContainer<K, V> wc) {
-        long key = wc.offset();
+        String key = getWcKey(wc);
         if (entries.containsKey(key)) {
             log.debug("Entry for {} already exists in shard queue, dropping record", wc);
         } else {
@@ -67,9 +80,9 @@ public class ProcessingShard<K, V> {
         }
     }
 
-    public void onSuccess(WorkContainer<?, ?> wc) {
+    public void onSuccess(WorkContainer<K, V> wc) {
         // remove work from shard's queue
-        entries.remove(wc.offset());
+        entries.remove(getWcKey(wc));
     }
 
     public void onFailure() {
@@ -96,15 +109,15 @@ public class ProcessingShard<K, V> {
                 .count();
     }
 
-    public WorkContainer<K, V> remove(long offset) {
+    public WorkContainer<K, V> remove(ConsumerRecord<K, V> consumerRecord) {
         // from onPartitionsRemoved callback, need to deduce the available worker count for the revoked partition
-        WorkContainer<K, V> toRemovedWorker = entries.get(offset);
+        String key = getWcKey(consumerRecord);
+        WorkContainer<K, V> toRemovedWorker = entries.get(key);
         if (toRemovedWorker != null && toRemovedWorker.isAvailableToTakeAsWork()) {
             dcrAvailableWorkContainerCntByDelta(1);
         }
-        return entries.remove(offset);
+        return entries.remove(key);
     }
-
 
 
     // remove staled WorkContainer otherwise when the partition is reassigned, the staled messages will:
@@ -114,7 +127,7 @@ public class ProcessingShard<K, V> {
         List<WorkContainer<K, V>> staleContainers = new ArrayList<>();
         var iterator = entries.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<Long, WorkContainer<K, V>> entry = iterator.next();
+            Map.Entry<String, WorkContainer<K, V>> entry = iterator.next();
             if (isWorkContainerStale(entry.getValue())) {
                 iterator.remove();  // Safe even on ConcurrentSkipListMap
                 dcrAvailableWorkContainerCntByDelta(1);
@@ -124,65 +137,79 @@ public class ProcessingShard<K, V> {
         return staleContainers;
     }
 
-    ArrayList<WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta, RetryQueue retryQueue) {
+    ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(int workToGetDelta, RetryQueue retryQueue, ActionListeners<K, V> actionListeners) {
         log.trace("Looking for work on shardQueueEntry: {}", getKey());
 
         var slowWork = new HashSet<WorkContainer<?, ?>>();
-        var workTaken = new ArrayList<WorkContainer<K, V>>();
+        ListMultimap<ShardKey, WorkContainer<K, V>> workTaken = LinkedListMultimap.create();
 
         var iterator = entries.entrySet().iterator();
         boolean hasStaleWorkContainer = false;
-        while (workTaken.size() < workToGetDelta && iterator.hasNext()) {
+
+        int keyBatchSize = 0;
+        var keyBatchBytes = 0;
+        long keyWCInFlight = getCountWorkInFlight();
+
+        while (keyBatchSize < workToGetDelta && iterator.hasNext()) {
             var workContainer = iterator.next().getValue();
+            if (actionListeners.couldBeTakenAsWork(workContainer.getCr())) {
+                if (pm.couldBeTakenAsWork(workContainer)) {
+                    if (workContainer.isAvailableToTakeAsWork()) {
+                        if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE) || options.getOrdering().equals(KEY_EXCLUSIVE)) {
+                            if (keyWCInFlight >= 1) {
+                                // if KEY_BATCH_EXCLUSIVE, then we can only take one key's worth of work at a time
+                                log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                                break;
+                            }
+                        }
 
-            if (pm.couldBeTakenAsWork(workContainer)) {
-                if (workContainer.isAvailableToTakeAsWork()) {
-                    log.trace("Taking {} as work", workContainer);
+                        log.trace("Taking {} as work", workContainer);
+                        workContainer.onQueueingForExecution();
+                        workTaken.put(key, workContainer);
+                        keyBatchSize++;
+                        keyBatchBytes += workContainer.getCr().serializedValueSize();
+                    } else {
+                        log.trace("Skipping {} as work, not available to take as work", workContainer);
+                        addToSlowWorkMaybe(slowWork, workContainer);
+                    }
 
-                    workContainer.onQueueingForExecution();
-                    workTaken.add(workContainer);
+                    if (options.getOrdering().equals(KEY_BATCH_EXCLUSIVE)) {
+                        if (keyWCInFlight >= 1 || (keyBatchSize >= options.getBatchSize() || keyBatchBytes >= options.getBatchBytes())) {
+                            // if KEY_BATCH_EXCLUSIVE, then we can only take one key batch worth of work at a time
+                            log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                            break;
+                        }
+                    } else if (isOrderRestricted()) {
+                        // can't take any more work from this shard, due to ordering restrictions
+                        // processing blocked on this shard, continue to next shard
+                        log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
+                        break;
+                    }
                 } else {
-                    log.trace("Skipping {} as work, not available to take as work", workContainer);
-                    addToSlowWorkMaybe(slowWork, workContainer);
-                }
-
-                if (isOrderRestricted()) {
-                    // can't take any more work from this shard, due to ordering restrictions
-                    // processing blocked on this shard, continue to next shard
-                    log.trace("Processing by {}, so have cannot get more messages on this ({}) shardEntry.", this.options.getOrdering(), getKey());
-                    break;
-                }
-            } else {
-                // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
-                //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
-                //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
-                //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
-                //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
-                //  matter.
-
-                if (isWorkContainerStale(workContainer)) {
-                    // remove stale container and deduct on availableWorkContainerCnt
-                    log.debug("shard {} there are still stale work container, need to remove container : {}", this, workContainer);
-                    dcrAvailableWorkContainerCntByDelta(1);
-                    iterator.remove();
-                } else {
+                    // break, assuming all work in this shard, is for the same ShardKey, which is always on the same
+                    //  partition (regardless of ordering mode - KEY, PARTITION or UNORDERED (which is parallel PARTITIONs)),
+                    //  so no point continuing shard scanning. This only isn't true if a non standard partitioner produced the
+                    //  recrods of the same key to different partitions. In which case, there's no way PC can make sure all
+                    //  records of that belong to the shard are able to even be processed by the same PC instance, so it doesn't
+                    //  matter.
                     log.trace("Partition for shard {} is blocked for work taking, stopping shard scan", this);
                     break;
                 }
+            } else {
+                break;
             }
         }
 
-        if (workTaken.size() == workToGetDelta) {
-            log.trace("Work taken ({}) exceeds max ({})", workTaken.size(), workToGetDelta);
+        if (keyBatchSize >= workToGetDelta) {
+            log.trace("Work taken ({}) exceeds max ({})", keyBatchSize, workToGetDelta);
         }
 
         logSlowWork(slowWork);
 
         // Remove from retry queue as picked for submission to work pool - filter to only remove work containers that have
         // previously failed - as retry queue won't have any that didn't previously fail.
-        retryQueue.removeAll(workTaken.stream().filter(WorkContainer::hasPreviouslyFailed).collect(Collectors.toList()));
-
-        dcrAvailableWorkContainerCntByDelta(workTaken.size());
+        retryQueue.removeAll(workTaken.values().stream().filter(WorkContainer::hasPreviouslyFailed).collect(Collectors.toList()));
+        dcrAvailableWorkContainerCntByDelta(keyBatchSize);
 
         return workTaken;
     }

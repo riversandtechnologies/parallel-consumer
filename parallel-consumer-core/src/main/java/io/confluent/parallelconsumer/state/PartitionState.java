@@ -588,27 +588,35 @@ public class PartitionState<K, V> {
 
         // for the incomplete offsets within this range of poll batch
         var offsetsToRemoveFromTracking = new ArrayList<Long>();
-        var trackedIncompletesWithinPolledBatch = incompleteOffsets.keySet().subSet(offsetOfLowestRecord, true, offsetOfHighestRecord, true);
-        for (long trackedIncomplete : trackedIncompletesWithinPolledBatch) {
-            boolean incompleteMissingFromPolledRecords = !polledOffsets.contains(trackedIncomplete);
+        try {
+            var trackedIncompletesWithinPolledBatch = incompleteOffsets.keySet().subSet(offsetOfLowestRecord, true, offsetOfHighestRecord, true);
+            for (long trackedIncomplete : trackedIncompletesWithinPolledBatch) {
+                boolean incompleteMissingFromPolledRecords = !polledOffsets.contains(trackedIncomplete);
 
-            if (incompleteMissingFromPolledRecords) {
-                offsetsToRemoveFromTracking.add(trackedIncomplete);
-                // don't need to remove it from the #commitQueue, as it would never have been added
+                if (incompleteMissingFromPolledRecords) {
+                    offsetsToRemoveFromTracking.add(trackedIncomplete);
+                    // don't need to remove it from the #commitQueue, as it would never have been added
+                }
             }
-        }
-        if (!offsetsToRemoveFromTracking.isEmpty()) {
-            log.warn("Offsets {} have been removed from partition {} (as they were not been returned within a polled batch " +
-                            "which should have contained them - batch offset range is {} to {}), so they be removed " +
-                            "from tracking state, as they will never be sent again to be retried. " +
-                            "This can be caused by PC rebalancing across a partition which has been compacted on offsets above the committed " +
-                            "base offset, after initial load and before a rebalance.",
-                    offsetsToRemoveFromTracking,
-                    getTp(),
+            if (!offsetsToRemoveFromTracking.isEmpty()) {
+                log.warn("Offsets {} have been removed from partition {} (as they were not been returned within a polled batch " +
+                                "which should have contained them - batch offset range is {} to {}), so they be removed " +
+                                "from tracking state, as they will never be sent again to be retried. " +
+                                "This can be caused by PC rebalancing across a partition which has been compacted on offsets above the committed " +
+                                "base offset, after initial load and before a rebalance.",
+                        offsetsToRemoveFromTracking,
+                        getTp(),
+                        offsetOfLowestRecord,
+                        offsetOfHighestRecord
+                );
+                offsetsToRemoveFromTracking.forEach(incompleteOffsets::remove);
+            }
+        } catch (Exception ex) {
+            log.error("Error truncating tracked record. " +
+                            "Offset of lowest record {}, offset of highest record {}.",
                     offsetOfLowestRecord,
-                    offsetOfHighestRecord
-            );
-            offsetsToRemoveFromTracking.forEach(incompleteOffsets::remove);
+                    offsetOfHighestRecord,
+                    ex);
         }
     }
 

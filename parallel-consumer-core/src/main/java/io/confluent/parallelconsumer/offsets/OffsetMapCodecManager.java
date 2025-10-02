@@ -14,10 +14,11 @@ import io.confluent.parallelconsumer.state.PartitionState;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -44,8 +45,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * @author Antony Stubbs
  */
 // metrics: avg time spend encoding, number of times each encoding used
-@Slf4j
 public class OffsetMapCodecManager<K, V> {
+    private static final Logger log = LogManager.getLogger(OffsetMapCodecManager.class);
 
     /**
      * Used to prevent tests running in parallel that depends on setting static state in this class. Manipulation of

@@ -4,6 +4,8 @@ package io.confluent.parallelconsumer.state;
  * Copyright (C) 2020-2025 Confluent, Inc.
  */
 
+import com.google.common.collect.LinkedListMultimap;
+import com.google.common.collect.ListMultimap;
 import io.confluent.csid.utils.LoopingResumingIterator;
 import io.confluent.parallelconsumer.ParallelConsumer;
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
@@ -26,7 +28,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.KEY;
+import static io.confluent.parallelconsumer.ParallelConsumerOptions.ProcessingOrder.*;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 
@@ -160,7 +162,7 @@ public class ShardManager<K, V> {
         if (processingShards.containsKey(shardKey)) {
             // remove the work
             ProcessingShard<K, V> shard = processingShards.get(shardKey);
-            WorkContainer<K, V> removedWC = shard.remove(consumerRecord.offset());
+            WorkContainer<K, V> removedWC = shard.remove(consumerRecord);
 
             // remove if in retry queue
             // check null to avoid race condition
@@ -191,14 +193,16 @@ public class ShardManager<K, V> {
 
         // If using KEY ordering, where the shard key is a message key, garbage collect old shard keys (i.e. KEY ordering we may never see a message for this key again)
         // If not, no point to remove the shard, as it will be reused for the next message from the same partition
-        boolean keyOrdering = options.getOrdering().equals(KEY);
+        boolean keyOrdering = options.getOrdering().equals(KEY) ||
+                options.getOrdering().equals(KEY_EXCLUSIVE) ||
+                options.getOrdering().equals(KEY_BATCH_EXCLUSIVE);
         if (keyOrdering && shardOpt.isPresent() && shardOpt.get().isEmpty()) {
             log.trace("Removing empty shard (key: {})", key);
             this.processingShards.remove(key);
         }
     }
 
-    public void onSuccess(WorkContainer<?, ?> wc) {
+    public void onSuccess(WorkContainer<K, V> wc) {
         // remove from the retry queue if it's contained
         this.retryQueue.remove(wc);
 
@@ -248,12 +252,12 @@ public class ShardManager<K, V> {
         }
     }
 
-    public List<WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
+    public ListMultimap<ShardKey, WorkContainer<K, V>> getWorkIfAvailable(final int requestedMaxWorkToRetrieve) {
         LoopingResumingIterator<ShardKey, ProcessingShard<K, V>> shardQueueIterator =
                 new LoopingResumingIterator<>(iterationResumePoint, this.processingShards);
 
         //
-        List<WorkContainer<K, V>> workFromAllShards = new ArrayList<>();
+        ListMultimap<ShardKey, WorkContainer<K, V>> workFromAllShards = LinkedListMultimap.create();
 
         // loop over shards, and get work from each
         Optional<Map.Entry<ShardKey, ProcessingShard<K, V>>> next = shardQueueIterator.next();
@@ -263,8 +267,10 @@ public class ShardManager<K, V> {
 
             //
             int remainingToGet = requestedMaxWorkToRetrieve - workFromAllShards.size();
-            var work = shard.getWorkIfAvailable(remainingToGet, retryQueue);
-            workFromAllShards.addAll(work);
+            var work = shard.getWorkIfAvailable(remainingToGet, retryQueue, module.pc().getActionListeners());
+            if (work != null && !work.isEmpty()) {
+                workFromAllShards.putAll(work);
+            }
 
             // next
             next = shardQueueIterator.next();

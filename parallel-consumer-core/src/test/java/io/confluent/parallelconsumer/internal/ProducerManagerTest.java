@@ -92,7 +92,7 @@ class ProducerManagerTest {
     private PCModuleTestEnv buildModule(ParallelConsumerOptions<String, String> opts) {
         return new PCModuleTestEnv(opts) {
             @Override
-            protected AbstractParallelEoSStreamProcessor<String, String> pc() {
+            public AbstractParallelEoSStreamProcessor<String, String> pc() {
                 if (parallelEoSStreamProcessor == null) {
                     AbstractParallelEoSStreamProcessor<String, String> raw = super.pc();
                     parallelEoSStreamProcessor = spy(raw);

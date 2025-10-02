@@ -47,7 +47,7 @@ public class PollContext<K, V> implements Iterable<RecordContext<K, V>> {
     PollContext(List<WorkContainer<K, V>> workContainers) {
         for (var wc : workContainers) {
             TopicPartition topicPartition = wc.getTopicPartition();
-            var recordSet = records.computeIfAbsent(topicPartition, ignore -> new HashSet<>());
+            var recordSet = records.computeIfAbsent(topicPartition, ignore -> new LinkedHashSet<>());
             recordSet.add(new RecordContextInternal<>(wc));
         }
     }
