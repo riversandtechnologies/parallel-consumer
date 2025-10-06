@@ -12,9 +12,10 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,8 +34,8 @@ import static java.util.Optional.of;
  *
  * @author Antony Stubbs
  */
-@Slf4j
 public class WorkContainer<K, V> implements Comparable<WorkContainer<K, V>> {
+    private static final Logger log = LogManager.getLogger(WorkContainer.class);
 
     static final String DEFAULT_TYPE = "DEFAULT";
 

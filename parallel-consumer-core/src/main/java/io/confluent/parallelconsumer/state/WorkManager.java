@@ -14,11 +14,11 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Tag;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import pl.tlinkowski.unij.api.UniLists;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.*;
@@ -41,8 +41,8 @@ import static lombok.AccessLevel.PUBLIC;
  *
  * @author Antony Stubbs
  */
-@Slf4j
 public class WorkManager<K, V> implements ConsumerRebalanceListener {
+    private static final Logger log = LogManager.getLogger(WorkManager.class);
 
     @Getter
     private final ParallelConsumerOptions<K, V> options;
@@ -241,7 +241,7 @@ public class WorkManager<K, V> implements ConsumerRebalanceListener {
      *         should be downloaded (or pipelined in the Consumer)
      */
     public boolean isSufficientlyLoaded() {
-        return (getNumberOfWorkQueuedInShardsAwaitingSelection() + getNumberRecordsOutForProcessing() ) > (long) options.getTargetAmountOfRecordsInFlight() * getLoadingFactor();
+        return (getNumberOfWorkQueuedInShardsAwaitingSelection() + getNumberRecordsOutForProcessing()) > (long) options.getTargetAmountOfRecordsInFlight() * getLoadingFactor();
     }
 
     private int getLoadingFactor() {

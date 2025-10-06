@@ -12,15 +12,17 @@ import io.confluent.parallelconsumer.internal.ActionListeners;
 import io.confluent.parallelconsumer.internal.RateLimiter;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static io.confluent.csid.utils.BackportUtils.toSeconds;
 import static io.confluent.csid.utils.JavaUtils.isGreaterThan;
@@ -34,9 +36,9 @@ import static lombok.AccessLevel.PRIVATE;
  * @author Antony Stubbs
  * @see ShardManager
  */
-@Slf4j
 @RequiredArgsConstructor
 public class ProcessingShard<K, V> {
+    private static final Logger log = LogManager.getLogger(ProcessingShard.class);
 
     /**
      * Map of offset to WorkUnits.
@@ -129,9 +131,9 @@ public class ProcessingShard<K, V> {
         while (iterator.hasNext()) {
             Map.Entry<String, WorkContainer<K, V>> entry = iterator.next();
             if (isWorkContainerStale(entry.getValue())) {
-                iterator.remove();  // Safe even on ConcurrentSkipListMap
                 dcrAvailableWorkContainerCntByDelta(1);
                 staleContainers.add(entry.getValue());
+                iterator.remove();  // Safe even on ConcurrentSkipListMap
             }
         }
         return staleContainers;
@@ -143,8 +145,7 @@ public class ProcessingShard<K, V> {
         var slowWork = new HashSet<WorkContainer<?, ?>>();
         ListMultimap<ShardKey, WorkContainer<K, V>> workTaken = LinkedListMultimap.create();
 
-        var iterator = entries.entrySet().iterator();
-        boolean hasStaleWorkContainer = false;
+        var iterator = getEntriesIterator();
 
         int keyBatchSize = 0;
         var keyBatchBytes = 0;
@@ -212,6 +213,25 @@ public class ProcessingShard<K, V> {
         dcrAvailableWorkContainerCntByDelta(keyBatchSize);
 
         return workTaken;
+    }
+
+    private Iterator<Map.Entry<String, WorkContainer<K, V>>> getEntriesIterator() {
+        try {
+            if (checkIfKeyPartOfMultiplePartitions()) {
+                final ArrayList<Map.Entry<String, WorkContainer<K, V>>> containerList = new ArrayList<>(entries.entrySet());
+                containerList.sort(Map.Entry.comparingByValue(Comparator.comparingLong(wc -> wc.getCr().timestamp())));
+                return containerList.iterator();
+            }
+        } catch (Exception e) {
+            if (log.isTraceEnabled()) {
+                log.trace("Failed to get distinct partition count for key: {}", getKey(), e);
+            }
+        }
+        return entries.entrySet().iterator();
+    }
+
+    private boolean checkIfKeyPartOfMultiplePartitions() {
+        return entries.entrySet().stream().flatMap(entrySet -> Stream.of(entrySet.getValue().getTopicPartition())).distinct().count() > 1;
     }
 
     private void logSlowWork(Set<WorkContainer<?, ?>> slowWork) {

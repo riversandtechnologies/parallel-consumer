@@ -19,9 +19,10 @@ import io.micrometer.core.instrument.Gauge;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.time.Duration;
 import java.util.*;
@@ -44,8 +45,8 @@ import static java.util.Optional.of;
  * @author Antony Stubbs
  */
 // metrics: number of queues, average queue length
-@Slf4j
 public class ShardManager<K, V> {
+    private static final Logger log = LogManager.getLogger(ShardManager.class);
 
     private final PCModule<K, V> module;
 
