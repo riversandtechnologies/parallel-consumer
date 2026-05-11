@@ -24,6 +24,8 @@ jobs:
           java-version: 21
           cache: 'maven'
       - name: Create Package
+        env:
+          EDS_BUILD_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
         run: mvn --no-transfer-progress clean package -DskipTests --file pom.xml --settings settings.xml -pl .,parallel-consumer-core
       - name: Publish Package
         env:
