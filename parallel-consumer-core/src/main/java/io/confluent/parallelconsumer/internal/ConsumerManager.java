@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2025 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
@@ -79,7 +79,7 @@ public class ConsumerManager<K, V> {
             records = pollWithActionListener(timeoutToUse);
         } catch (WakeupException w) {
             correctPollWakeups++;
-            log.debug("Awoken from broker poll");
+            log.warn("Awoken from broker poll");
             log.trace("Wakeup caller is:", w);
             records = new ConsumerRecords<>(UniMaps.of());
         } catch (IllegalStateException ex) {

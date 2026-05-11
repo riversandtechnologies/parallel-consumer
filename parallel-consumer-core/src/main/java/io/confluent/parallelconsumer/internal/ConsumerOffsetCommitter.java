@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2025 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
@@ -156,7 +156,7 @@ public class ConsumerOffsetCommitter<K, V> extends AbstractOffsetCommitter<K, V>
                 }
                 waitingOnCommitResponse = take.getRequest().getId() != commitRequest.getId();
             } catch (InterruptedException e) {
-                log.debug("Interrupted waiting for commit response", e);
+                log.error("Interrupted waiting for commit response", e);
             }
             attempts++;
         }

@@ -1,14 +1,15 @@
 package io.confluent.parallelconsumer.internal;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.parallelconsumer.ParallelConsumerOptions;
 import lombok.*;
 import lombok.experimental.Delegate;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -29,9 +30,10 @@ import static io.confluent.parallelconsumer.internal.ProducerWrapper.ProducerSta
  *
  * @author Antony Stubbs
  */
-@Slf4j
 @RequiredArgsConstructor
 public class ProducerWrapper<K, V> implements Producer<K, V> {
+
+    private static final Logger log = LogManager.getLogger(ProducerWrapper.class);
 
     /**
      * Used to track Producer's transaction state, as it' isn't otherwise exposed.

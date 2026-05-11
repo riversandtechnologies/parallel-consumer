@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.offsets;
 
 /*-
- * Copyright (C) 2020-2022 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.Range;
@@ -10,7 +10,8 @@ import io.confluent.parallelconsumer.state.PartitionState;
 import io.confluent.parallelconsumer.state.WorkManager;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -30,9 +31,10 @@ import static io.confluent.parallelconsumer.state.PartitionState.KAFKA_OFFSET_AB
  * @author Antony Stubbs
  * @see #invoke()
  */
-@Slf4j
 @ToString(onlyExplicitlyIncluded = true)
 public class OffsetSimultaneousEncoder {
+
+    private static final Logger log = LogManager.getLogger(OffsetSimultaneousEncoder.class);
 
     /**
      * Size threshold in bytes after which compressing the encodings will be compared, as it seems to be typically worth
@@ -168,7 +170,7 @@ public class OffsetSimultaneousEncoder {
         try {
             newEncoders.add(new BitSetEncoder(lengthBetweenBaseAndHighOffset, this, version));
         } catch (BitSetEncodingNotSupportedException a) {
-            log.debug("Cannot construct {} version {} : {}", BitSetEncoder.class.getSimpleName(), version, a.getMessage());
+            log.error("Cannot construct {} version {} : {}", BitSetEncoder.class.getSimpleName(), version, a.getMessage(), a);
         }
     }
 
@@ -188,7 +190,7 @@ public class OffsetSimultaneousEncoder {
         try {
             activeEncoders.add(new ByteBufferEncoder(lengthBetweenBaseAndHighOffset, this));
         } catch (ArithmeticException a) {
-            log.warn("Cannot use {} encoder ({})", BitSetEncoder.class.getSimpleName(), a.getMessage());
+            log.error("Cannot use {} encoder ({})", BitSetEncoder.class.getSimpleName(), a.getMessage(), a);
         }
     }
 
@@ -243,7 +245,7 @@ public class OffsetSimultaneousEncoder {
                         encoder.encodeCompletedOffset(relativeOffset);
                     }
                 } catch (EncodingNotSupportedException e) {
-                    log.debug("Error encoding offset {} with encoder {}, removing encoder", actualOffset, encoder, e);
+                    log.error("Error encoding offset {} with encoder {}, removing encoder", actualOffset, encoder, e);
                     activeEncoders.remove(encoder);
                 }
             });
@@ -262,7 +264,7 @@ public class OffsetSimultaneousEncoder {
             try {
                 encoder.register();
             } catch (EncodingNotSupportedException e) {
-                log.debug("Removing {} encoder, not supported ({})", encoder.getEncodingType().description(), e.getMessage());
+                log.error("Removing {} encoder, not supported ({})", encoder.getEncodingType().description(), e.getMessage(), e);
                 toRemove.add(encoder);
             }
         }
