@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.examples.reactor;
 
 /*-
- * Copyright (C) 2020-2024 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.KafkaTestUtils;
@@ -68,7 +68,7 @@ class ReactorAppTest {
 
         @Override
         Producer<String, String> getKafkaProducer() {
-            return new MockProducer<>(true, null, null);
+            return new MockProducer<>(true, null, null, null);
         }
 
         @Override

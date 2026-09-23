@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.examples.core;
 
 /*-
- * Copyright (C) 2020-2021 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import io.confluent.csid.utils.KafkaTestUtils;
@@ -82,7 +82,7 @@ class CoreAppTest {
         @Override
         Producer<String, String> getKafkaProducer() {
             var stringSerializer = Serdes.String().serializer();
-            return new MockProducer<>(true, stringSerializer, stringSerializer);
+            return new MockProducer<>(true, null, stringSerializer, stringSerializer);
         }
 
         @Override

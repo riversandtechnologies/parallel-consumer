@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer;
 
 /*-
- * Copyright (C) 2020-2023 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import com.google.common.truth.Truth;
@@ -179,7 +179,7 @@ public abstract class AbstractParallelEoSStreamProcessorTestBase {
 
     protected void instantiateConsumerProducer() {
         LongPollingMockConsumer<String, String> consumer = new LongPollingMockConsumer<>(OffsetResetStrategy.EARLIEST);
-        MockProducer<String, String> producer = new MockProducer<>(true,
+        MockProducer<String, String> producer = new MockProducer<>(true, null,
                 Serdes.String().serializer(), Serdes.String().serializer());
 
         this.producerSpy = spy(producer);

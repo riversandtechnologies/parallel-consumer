@@ -1,7 +1,7 @@
 package io.confluent.parallelconsumer.examples.vertx;
 
 /*-
- * Copyright (C) 2020-2021 Confluent, Inc.
+ * Copyright (C) 2020-2026 Confluent, Inc.
  */
 
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -74,7 +74,7 @@ class VertxAppTest {
 
         @Override
         Producer<String, String> getKafkaProducer() {
-            return new MockProducer<>(true, null, null);
+            return new MockProducer<>(true, null, null, null);
         }
 
         @Override
