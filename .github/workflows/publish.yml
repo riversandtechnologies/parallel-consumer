@@ -17,9 +17,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: 0.5.3.3-rs
-      - name: Get tag
-        run: |
-          echo VERSION=0.5.3.3.3-rs
       - name: Set up Eclipse Temurin JDK 21
         uses: actions/setup-java@v4
         with:
@@ -35,5 +32,5 @@ jobs:
           EDS_BUILD_TOKEN: ${{ secrets.AZURE_DEVOPS_ARTIFACTS_PUBLISH_TOKEN }}
           REGISTRY_URL: "https://edgenettfs.pkgs.visualstudio.com/DataPlatform/_packaging/dp.internal/maven/v1"
         run: |
-          mvn org.apache.maven.plugins:maven-install-plugin:3.1.3:install-file -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.3.3-rs.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true
-          mvn -B org.apache.maven.plugins:maven-deploy-plugin:3.1.3:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.3.3-rs.jar -DpomFile=/home/runner/.m2/repository/io/confluent/parallelconsumer/parallel-consumer-core/${{ env.VERSION }}/parallel-consumer-core-${{ env.VERSION }}.pom -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=${{ env.VERSION }} -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
+          mvn org.apache.maven.plugins:maven-install-plugin:3.1.3:install-file -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.3.3-rs.jar -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=0.5.3.3.3-rs -Dpackaging=jar -DgeneratePom=true
+          mvn -B org.apache.maven.plugins:maven-deploy-plugin:3.1.3:deploy-file -Durl=${{ env.REGISTRY_URL }} -DrepositoryId=dp.internal -Dfile=parallel-consumer-core/target/parallel-consumer-core-0.5.3.3-rs.jar -DpomFile=/home/runner/.m2/repository/io/confluent/parallelconsumer/parallel-consumer-core/0.5.3.3.3-rs/parallel-consumer-core-0.5.3.3.3-rs.pom -DgroupId=io.confluent.parallelconsumer -DartifactId=parallel-consumer-core -Dversion=0.5.3.3.3-rs -Dpackaging=jar -DgeneratePom=true -DuniqueVersion=false --settings settings.xml
